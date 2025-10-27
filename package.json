@@ -161,7 +161,6 @@
     "typescript": "^5.3.0",
     "@vscode/vsce": "^2.22.0"
   },
-  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/fault-dev/unfault-core"
