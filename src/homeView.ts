@@ -1,5 +1,5 @@
 /**
- * Home screen webview for Fault Rules extension
+ * Home screen webview for Unfault extension
  */
 
 import * as vscode from 'vscode';
@@ -26,8 +26,8 @@ export class HomeViewProvider {
     }
 
     this.panel = vscode.window.createWebviewPanel(
-      'faultRulesHome',
-      'Fault Rules',
+      'unfaultHome',
+      'Unfault',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -60,7 +60,7 @@ export class HomeViewProvider {
     }
 
     const authStatus = await this.authManager.initialize();
-    const config = vscode.workspace.getConfiguration('faultRules');
+    const config = vscode.workspace.getConfiguration('unfault');
 
     this.panel.webview.html = this.getHtmlContent(authStatus, config);
   }
@@ -81,15 +81,15 @@ export class HomeViewProvider {
         }
 
         // Store API key securely
-        await this.context.secrets.store('faultRules.apiKey', apiKey);
-        await this.context.globalState.update('faultRules.authMethod', 'api_key');
+        await this.context.secrets.store('unfault.apiKey', apiKey);
+        await this.context.globalState.update('unfault.authMethod', 'api_key');
         
         vscode.window.showInformationMessage('Successfully authenticated!');
         await this.refresh();
         break;
 
       case 'openTerminal':
-        const terminal = vscode.window.createTerminal('Fault Rules - CLI Login');
+        const terminal = vscode.window.createTerminal('Unfault - CLI Login');
         terminal.show();
         terminal.sendText('unfault login');
         break;
@@ -118,7 +118,7 @@ export class HomeViewProvider {
         break;
 
       case 'updateSetting':
-        const settingConfig = vscode.workspace.getConfiguration('faultRules');
+        const settingConfig = vscode.workspace.getConfiguration('unfault');
         await settingConfig.update(
           message.setting,
           message.value,
@@ -137,7 +137,7 @@ export class HomeViewProvider {
         break;
 
       case 'openSettings':
-        vscode.commands.executeCommand('workbench.action.openSettings', 'faultRules');
+        vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
         break;
 
       case 'refresh':
@@ -161,7 +161,7 @@ export class HomeViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fault Rules</title>
+  <title>unfault</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Timmana&display=swap" rel="stylesheet">
@@ -539,7 +539,7 @@ export class HomeViewProvider {
     <div class="header">
       <div class="logo">🛡️</div>
       <div class="header-text">
-        <h1>Fault Rules</h1>
+        <h1>unfault</h1>
         <p>Production readiness analysis for your code</p>
       </div>
     </div>

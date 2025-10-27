@@ -1,5 +1,5 @@
 /**
- * API client for Fault Rules backend
+ * API client for Unfault backend
  */
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
@@ -41,7 +41,7 @@ export class FaultRulesApiClient {
 
     // Update client when configuration changes
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('faultRules.apiEndpoint')) {
+      if (e.affectsConfiguration('unfault.apiEndpoint')) {
         this.baseUrl = this.getApiEndpoint();
         this.client.defaults.baseURL = this.baseUrl;
       }
@@ -157,7 +157,7 @@ export class FaultRulesApiClient {
   }
 
   private getApiEndpoint(): string {
-    const config = vscode.workspace.getConfiguration('faultRules');
+    const config = vscode.workspace.getConfiguration('unfault');
     return config.get<string>('apiEndpoint', 'http://localhost:8080/api/v1');
   }
 
@@ -198,7 +198,7 @@ export class FaultRulesApiClient {
         const apiError = axiosError.response.data;
         throw new Error(`API Error: ${apiError.message}`);
       } else if (axiosError.code === 'ECONNREFUSED') {
-        throw new Error(`Cannot connect to Fault Rules API at ${this.baseUrl}. Is the server running?`);
+        throw new Error(`Cannot connect to Unfault API at ${this.baseUrl}. Is the server running?`);
       }
     }
     throw error;

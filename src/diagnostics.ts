@@ -1,5 +1,5 @@
 /**
- * Diagnostics provider for Fault Rules
+ * Diagnostics provider for Unfault
  */
 
 import * as vscode from 'vscode';

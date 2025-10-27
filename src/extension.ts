@@ -18,10 +18,10 @@ let outputChannel: vscode.OutputChannel;
 let homeViewProvider: HomeViewProvider;
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Fault Rules extension activating...');
+  console.log('Unfault extension activating...');
   
   // Initialize components
-  outputChannel = vscode.window.createOutputChannel('Fault Rules');
+  outputChannel = vscode.window.createOutputChannel('Unfault');
   authManager = new AuthManager(context, outputChannel);
   apiClient = new FaultRulesApiClient(authManager, outputChannel);
   diagnostics = new FaultRulesDiagnostics();
@@ -33,8 +33,8 @@ export function activate(context: vscode.ExtensionContext) {
     100
   );
   statusBarItem.command = 'fault-rules.showHome';
-  statusBarItem.text = '$(shield) Fault Rules';
-  statusBarItem.tooltip = 'Click to open Fault Rules home';
+  statusBarItem.text = '$(shield) Unfault';
+  statusBarItem.tooltip = 'Click to open Unfault home';
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
@@ -66,7 +66,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // Register document save handler
-  const config = vscode.workspace.getConfiguration('faultRules');
+  const config = vscode.workspace.getConfiguration('unfault');
   if (config.get<boolean>('autoAnalyze', true)) {
     context.subscriptions.push(
       vscode.workspace.onDidSaveTextDocument(onDocumentSave)
@@ -79,11 +79,11 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(outputChannel);
 
-  console.log('Fault Rules extension activated');
+  console.log('Unfault extension activated');
 }
 
 export function deactivate() {
-  console.log('Fault Rules extension deactivated');
+  console.log('Unfault extension deactivated');
 }
 
 /**
@@ -117,15 +117,15 @@ async function showHome() {
 async function checkApiHealth() {
   const isHealthy = await apiClient.healthCheck();
   if (!isHealthy) {
-    const config = vscode.workspace.getConfiguration('faultRules');
+    const config = vscode.workspace.getConfiguration('unfault');
     const endpoint = config.get<string>('apiEndpoint');
     
     vscode.window.showWarningMessage(
-      `Cannot connect to Fault Rules API at ${endpoint}. Some features may not work.`,
+      `Cannot connect to Unfault API at ${endpoint}. Some features may not work.`,
       'Open Settings'
     ).then(action => {
       if (action === 'Open Settings') {
-        vscode.commands.executeCommand('workbench.action.openSettings', 'faultRules.apiEndpoint');
+        vscode.commands.executeCommand('workbench.action.openSettings', 'unfault.apiEndpoint');
       }
     });
   }
@@ -140,7 +140,7 @@ async function ensureAuthenticated(): Promise<boolean> {
   }
 
   const choice = await vscode.window.showWarningMessage(
-    'You need to authenticate to use Fault Rules features.',
+    'You need to authenticate to use Unfault features.',
     'Login Now',
     'Cancel'
   );
@@ -169,7 +169,7 @@ async function login() {
  */
 async function logout() {
   await authManager.logout();
-  statusBarItem.text = '$(shield) Fault Rules';
+  statusBarItem.text = '$(shield) Unfault';
   statusBarItem.tooltip = 'Click to login';
 }
 
@@ -213,7 +213,7 @@ async function analyzeCurrentFile() {
         cancellable: false,
       },
       async () => {
-        const config = vscode.workspace.getConfiguration('faultRules');
+        const config = vscode.workspace.getConfiguration('unfault');
         const content = document.getText();
         const result = await apiClient.analyzeFiles({
           files: [{
@@ -270,7 +270,7 @@ async function analyzeProject() {
         cancellable: false,
       },
       async () => {
-        const config = vscode.workspace.getConfiguration('faultRules');
+        const config = vscode.workspace.getConfiguration('unfault');
         const result = await apiClient.analyzeProject({
           root_path: workspaceFolder.uri.fsPath,
           options: {
@@ -951,7 +951,7 @@ async function applyProposedFix(proposedFix: any, finding: Finding, uri: vscode.
       if (choice === 'Run') {
         // Create a terminal and run commands
         const terminal = vscode.window.createTerminal({
-          name: `Fault Rules: ${finding.title}`,
+          name: `Unfault: ${finding.title}`,
           cwd: workspaceFolder.uri.fsPath,
         });
         terminal.show();
@@ -997,7 +997,7 @@ async function onDocumentSave(document: vscode.TextDocument) {
   const relativePath = vscode.workspace.asRelativePath(document.uri);
   
   try {
-    const config = vscode.workspace.getConfiguration('faultRules');
+    const config = vscode.workspace.getConfiguration('unfault');
     const content = document.getText();
     const result = await apiClient.analyzeFiles({
       files: [{

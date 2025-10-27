@@ -1,5 +1,5 @@
 /**
- * Type definitions for Fault Rules API
+ * Type definitions for Unfault API
  */
 
 export interface ServiceInfo {

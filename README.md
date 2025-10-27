@@ -1,4 +1,4 @@
-# Fault Rules VSCode Extension
+# Unfault VSCode Extension
 
 Production readiness analysis and automated fixes directly in your IDE.
 
@@ -45,7 +45,7 @@ The mock server will run at `http://localhost:8080`
 
 ### 2. Configure the Extension
 
-Open VSCode settings (Ctrl+,) and search for "Fault Rules":
+Open VSCode settings (Ctrl+,) and search for "Unfault":
 
 - **API Endpoint**: `http://localhost:8080/api/v1` (default for mock server)
 - **Auto Analyze**: Enable/disable automatic analysis on file save
@@ -54,12 +54,12 @@ Open VSCode settings (Ctrl+,) and search for "Fault Rules":
 ### 3. Analyze Your Code
 
 **Analyze Current File:**
-- Command Palette (Ctrl+Shift+P) → "Fault Rules: Analyze Current File"
+- Command Palette (Ctrl+Shift+P) → "Unfault: Analyze Current File"
 - Or save a file with auto-analyze enabled
 
 **Analyze Entire Project:**
-- Command Palette → "Fault Rules: Analyze Entire Project"
-- Or click the status bar item "🛡️ Fault Rules"
+- Command Palette → "Unfault: Analyze Entire Project"
+- Or click the status bar item "🛡️ Unfault"
 
 ## Usage
 
@@ -101,20 +101,20 @@ Click the status bar score to see a detailed breakdown.
 
 ```json
 {
-  // API endpoint for Fault Rules backend
-  "faultRules.apiEndpoint": "http://localhost:8080/api/v1",
+  // API endpoint for Unfault backend
+  "unfault.apiEndpoint": "http://localhost:8080/api/v1",
   
   // Automatically analyze files on save
-  "faultRules.autoAnalyze": true,
+  "unfault.autoAnalyze": true,
   
   // Minimum severity level to display
-  "faultRules.severityThreshold": "info",
+  "unfault.severityThreshold": "info",
   
   // Maximum file size to analyze (bytes)
-  "faultRules.maxFileSize": 1048576,
+  "unfault.maxFileSize": 1048576,
   
   // Glob patterns to exclude from analysis
-  "faultRules.excludePatterns": [
+  "unfault.excludePatterns": [
     "node_modules/**",
     "*.test.js",
     "*.test.py",
@@ -124,7 +124,7 @@ Click the status bar score to see a detailed breakdown.
   ],
   
   // Show inline annotations with fixes
-  "faultRules.enableInlineAnnotations": true
+  "unfault.enableInlineAnnotations": true
 }
 ```
 
@@ -177,7 +177,7 @@ npm run package
 
 ### Testing with Mock Server
 
-The mock server simulates the Fault Rules API for development and testing:
+The mock server simulates the Unfault API for development and testing:
 
 ```bash
 cd mock-server
@@ -204,18 +204,18 @@ Mock endpoints:
 
 Logs appear in:
 - Debug Console (in the original VSCode window)
-- Output panel → "Fault Rules" channel (in Extension Host)
+- Output panel → "Unfault" channel (in Extension Host)
 
 ## API Integration
 
 ### Connecting to Real Backend
 
-To use with an actual Fault Rules backend:
+To use with an actual Unfault backend:
 
 1. Update the API endpoint in settings:
    ```json
    {
-     "faultRules.apiEndpoint": "https://your-api.example.com/api/v1"
+     "unfault.apiEndpoint": "https://your-api.example.com/api/v1"
    }
    ```
 
@@ -234,7 +234,7 @@ See `docs/api/vscode-extension-api.yaml` for complete specification.
 
 ## Troubleshooting
 
-### "Cannot connect to Fault Rules API"
+### "Cannot connect to Unfault API"
 
 **Cause**: Extension cannot reach the configured API endpoint
 
@@ -258,7 +258,7 @@ These are expected during development as node_modules won't be present initially
 
 ### Extension not activating
 
-1. Check Output panel → "Fault Rules" for error messages
+1. Check Output panel → "Unfault" for error messages
 2. Verify you're working with supported file types
 3. Try reloading the window (Ctrl+Shift+P → "Reload Window")
 
@@ -308,4 +308,4 @@ MIT License - see LICENSE file for details
 
 ---
 
-Made with ❤️ by the Fault Rules team
+Made with ❤️ by the Unfault team

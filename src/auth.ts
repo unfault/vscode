@@ -1,5 +1,5 @@
 /**
- * Authentication module for Fault Rules extension
+ * Authentication module for Unfault extension
  */
 
 import * as vscode from 'vscode';
@@ -8,8 +8,8 @@ import * as util from 'util';
 
 const exec = util.promisify(child_process.exec);
 
-const API_KEY_SECRET = 'faultRules.apiKey';
-const AUTH_METHOD_KEY = 'faultRules.authMethod';
+const API_KEY_SECRET = 'unfault.apiKey';
+const AUTH_METHOD_KEY = 'unfault.authMethod';
 
 export type AuthMethod = 'api_key' | 'cli' | 'none';
 
@@ -65,7 +65,7 @@ export class AuthManager {
    */
   async promptAuthentication(): Promise<AuthStatus> {
     const choice = await vscode.window.showInformationMessage(
-      'Fault Rules requires authentication to analyze your code.',
+      'Unfault requires authentication to analyze your code.',
       { modal: true },
       'Enter API Key',
       'Run unfault login',
@@ -92,7 +92,7 @@ export class AuthManager {
    */
   async manualApiKeyEntry(): Promise<AuthStatus> {
     const apiKey = await vscode.window.showInputBox({
-      prompt: 'Enter your Fault Rules API key',
+      prompt: 'Enter your Unfault API key',
       password: true,
       placeHolder: 'sk_live_xxxxxxxxxx',
       validateInput: (value) => {
@@ -168,7 +168,7 @@ export class AuthManager {
     );
 
     if (choice === 'Open Terminal') {
-      const terminal = vscode.window.createTerminal('Fault Rules Login');
+      const terminal = vscode.window.createTerminal('Unfault Login');
       terminal.show();
       terminal.sendText('unfault login');
       

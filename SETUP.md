@@ -1,6 +1,6 @@
-# Fault Rules VSCode Extension - Setup Guide
+# Unfault VSCode Extension - Setup Guide
 
-Quick setup guide for the Fault Rules VSCode extension.
+Quick setup guide for the Unfault VSCode extension.
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ npm start
 
 You should see:
 ```
-🚀 Mock Fault Rules API server running at http://localhost:8080
+🚀 Mock Unfault API server running at http://localhost:8080
 📊 Health check: http://localhost:8080/health
 📚 API base: http://localhost:8080/api/v1
 
@@ -55,15 +55,15 @@ Then in VSCode:
 2. Press `F5` to launch Extension Development Host
 3. In the new window, open a project folder
 4. Try commands:
-   - Ctrl+Shift+P → "Fault Rules: Analyze Current File"
-   - Ctrl+Shift+P → "Fault Rules: Analyze Entire Project"
+   - Ctrl+Shift+P → "Unfault: Analyze Current File"
+   - Ctrl+Shift+P → "Unfault: Analyze Entire Project"
 
 ### Option B: Production Mode (with Real Backend)
 
 1. Update settings in the Extension Development Host:
    ```json
    {
-     "faultRules.apiEndpoint": "https://your-api.example.com/api/v1"
+     "unfault.apiEndpoint": "https://your-api.example.com/api/v1"
    }
    ```
 
@@ -91,7 +91,7 @@ Leave this running in a terminal. Changes to TypeScript files will auto-compile.
 ### View Output
 
 In Extension Development Host window:
-- **View → Output** → Select "Fault Rules" channel
+- **View → Output** → Select "Unfault" channel
 - See all extension logs and API responses
 
 ### Testing with Mock Data
@@ -130,15 +130,15 @@ This creates `fault-rules-0.1.0.vsix` file.
 
 ### Extension Settings
 
-Settings → search "Fault Rules":
+Settings → search "Unfault":
 
 ```json
 {
-  "faultRules.apiEndpoint": "http://localhost:8080/api/v1",
-  "faultRules.autoAnalyze": true,
-  "faultRules.severityThreshold": "info",
-  "faultRules.maxFileSize": 1048576,
-  "faultRules.excludePatterns": [
+  "unfault.apiEndpoint": "http://localhost:8080/api/v1",
+  "unfault.autoAnalyze": true,
+  "unfault.severityThreshold": "info",
+  "unfault.maxFileSize": 1048576,
+  "unfault.excludePatterns": [
     "node_modules/**",
     "*.test.js",
     ".git/**"
@@ -197,7 +197,7 @@ npm install
 1. Check you're using VSCode 1.75.0+
 2. Open a folder (not just files)
 3. Open a supported file type (.py, .js, .ts, .go, .rs)
-4. Check Output → "Fault Rules" for errors
+4. Check Output → "Unfault" for errors
 
 ### Mock server connection refused
 
@@ -208,7 +208,7 @@ npm install
 ### No diagnostics showing
 
 1. Verify auto-analyze is enabled in settings
-2. Try manual analysis: Ctrl+Shift+P → "Fault Rules: Analyze Current File"
+2. Try manual analysis: Ctrl+Shift+P → "Unfault: Analyze Current File"
 3. Check Output panel for API errors
 4. Verify severity threshold in settings
 
