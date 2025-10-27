@@ -1,0 +1,170 @@
+{
+  "name": "unfault-core",
+  "displayName": "Unfault Core",
+  "description": "Production readiness analysis and automated fixes for your code",
+  "version": "0.1.0",
+  "publisher": "fault-dev",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "production",
+    "readiness",
+    "observability",
+    "resilience",
+    "sre"
+  ],
+  "activationEvents": [
+    "onLanguage:python",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:go",
+    "onLanguage:rust",
+    "onLanguage:java",
+    "onCommand:unfault-core.analyzeFile",
+    "onCommand:unfault-core.analyzeProject",
+    "onCommand:unfault-core.showReadinessScore"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "unfault-core.showHome",
+        "title": "Unfault Core: Show Home",
+        "icon": "$(home)"
+      },
+      {
+        "command": "unfault-core.login",
+        "title": "Unfault Core: Login"
+      },
+      {
+        "command": "unfault-core.logout",
+        "title": "Unfault Core: Logout"
+      },
+      {
+        "command": "unfault-core.updateApiKey",
+        "title": "Unfault Core: Update API Key"
+      },
+      {
+        "command": "unfault-core.analyzeFile",
+        "title": "Unfault Core: Analyze Current File"
+      },
+      {
+        "command": "unfault-core.analyzeProject",
+        "title": "Unfault Core: Analyze Entire Project"
+      },
+      {
+        "command": "unfault-core.showReadinessScore",
+        "title": "Unfault Core: Show Production Readiness Score"
+      },
+      {
+        "command": "unfault-core.explainRule",
+        "title": "Unfault Core: Explain Rule"
+      },
+      {
+        "command": "unfault-core.applyFix",
+        "title": "Unfault Core: Apply Fix"
+      }
+    ],
+    "configuration": {
+      "title": "Unfault Core",
+      "properties": {
+        "faultRules.apiEndpoint": {
+          "type": "string",
+          "default": "http://localhost:8080/api/v1",
+          "description": "API endpoint for the Unfault Core analysis backend"
+        },
+        "faultRules.autoAnalyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically analyze files on save"
+        },
+        "faultRules.severityThreshold": {
+          "type": "string",
+          "enum": ["info", "low", "medium", "high", "critical"],
+          "default": "info",
+          "description": "Minimum severity level to display"
+        },
+        "faultRules.maxFileSize": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Maximum file size to analyze (bytes)"
+        },
+        "faultRules.excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "node_modules/**",
+            "*.test.js",
+            "*.test.py",
+            ".git/**",
+            "dist/**",
+            "build/**"
+          ],
+          "description": "Glob patterns to exclude from analysis"
+        },
+        "faultRules.enableInlineAnnotations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline annotations with fixes"
+        }
+      }
+    },
+    "colors": [
+      {
+        "id": "faultRules.criticalSeverity",
+        "description": "Color for critical severity findings",
+        "defaults": {
+          "dark": "#ff4444",
+          "light": "#dd0000",
+          "highContrast": "#ff0000"
+        }
+      },
+      {
+        "id": "faultRules.highSeverity",
+        "description": "Color for high severity findings",
+        "defaults": {
+          "dark": "#ff9944",
+          "light": "#dd6600",
+          "highContrast": "#ff8800"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.75.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/test-electron": "^2.3.8",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fault-dev/unfault-core"
+  },
+  "license": "MIT"
+}
