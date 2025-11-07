@@ -5,10 +5,15 @@ All notable changes to the Unfault VS Code extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.6] - 2025-11-07
+## [0.1.7] - 2025-11-07
 
 ### Changed
 - Bug fixes and minor improvements
+
+## [0.1.6] - 2025-11-07
+
+### Changed
+- Version bump for new release
 
 ## [0.1.5] - 2025-11-07
 
@@ -74,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical Details
 - Minimum VS Code version: 1.75.0
+[0.1.7]: https://github.com/unfault/vscode/releases/tag/v0.1.7
 [0.1.6]: https://github.com/unfault/vscode/releases/tag/v0.1.6
 [0.1.5]: https://github.com/unfault/vscode/releases/tag/v0.1.5
 - Language support: Python, JavaScript, TypeScript, Go, Rust, Java
