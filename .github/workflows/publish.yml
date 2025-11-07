@@ -10,6 +10,9 @@ jobs:
     environment: release
 
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
     
     permissions:
       contents: write  # Required to upload release assets
@@ -36,13 +39,20 @@ jobs:
     - name: Package extension
       run: npm run package
     
-    - name: Create GitHub Release with VSIX
-      uses: softprops/action-gh-release@v1
-      with:
-        files: '*.vsix'
-        token: ${{ secrets.GITHUB_TOKEN }}
-        fail_on_unmatched_files: true
-        generate_release_notes: true
+    - name: Ensure GitHub Release and upload VSIX
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        TAG="${{ github.ref_name }}"
+        VSIX_FILE="$(ls *.vsix)"
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          echo "Release $TAG exists. Uploading asset with --clobber"
+          gh release upload "$TAG" "$VSIX_FILE" --clobber
+        else
+          echo "Creating release $TAG and uploading asset"
+          gh release create "$TAG" "$VSIX_FILE" --title "$TAG" --notes "Automated release for $TAG" --latest
+        fi
     
     - name: Publish to VSCode Marketplace
       env:
