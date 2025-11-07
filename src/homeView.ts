@@ -129,11 +129,11 @@ export class HomeViewProvider {
         break;
 
       case 'analyzeProject':
-        vscode.commands.executeCommand('fault-rules.analyzeProject');
+        vscode.commands.executeCommand('unfault.analyzeProject');
         break;
 
       case 'analyzeFile':
-        vscode.commands.executeCommand('fault-rules.analyzeFile');
+        vscode.commands.executeCommand('unfault.analyzeFile');
         break;
 
       case 'openSettings':
@@ -152,7 +152,7 @@ export class HomeViewProvider {
   private getHtmlContent(authStatus: AuthStatus, config: vscode.WorkspaceConfiguration): string {
     const authenticated = authStatus.authenticated;
     const authMethod = authStatus.method;
-    const apiEndpoint = config.get<string>('apiEndpoint', 'http://localhost:8080/api/v1');
+    const analysisMode = config.get<string>('analysisMode', 'local');
     const autoAnalyze = config.get<boolean>('autoAnalyze', true);
     const severityThreshold = config.get<string>('severityThreshold', 'info');
 
@@ -686,15 +686,14 @@ export class HomeViewProvider {
 
       <div class="setting-row">
         <div class="setting-label">
-          <div class="setting-label-text">API Endpoint</div>
-          <div class="setting-description">Backend API URL</div>
+          <div class="setting-label-text">Analysis Mode</div>
+          <div class="setting-description">Choose between local development or cloud analysis</div>
         </div>
         <div class="setting-control">
-          <input 
-            type="text" 
-            value="${apiEndpoint}" 
-            onchange="updateSetting('apiEndpoint', this.value)"
-          />
+          <select onchange="updateSetting('analysisMode', this.value)">
+            <option value="local" ${analysisMode === 'local' ? 'selected' : ''}>Local (Development)</option>
+            <option value="cloud" ${analysisMode === 'cloud' ? 'selected' : ''}>Cloud (Production)</option>
+          </select>
         </div>
       </div>
 

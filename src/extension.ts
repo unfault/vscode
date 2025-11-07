@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.StatusBarAlignment.Right,
     100
   );
-  statusBarItem.command = 'fault-rules.showHome';
+  statusBarItem.command = 'unfault.showHome';
   statusBarItem.text = '$(shield) Unfault';
   statusBarItem.tooltip = 'Click to open Unfault home';
   statusBarItem.show();
@@ -52,17 +52,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register commands
   context.subscriptions.push(
-    vscode.commands.registerCommand('fault-rules.showHome', showHome),
-    vscode.commands.registerCommand('fault-rules.login', login),
-    vscode.commands.registerCommand('fault-rules.logout', logout),
-    vscode.commands.registerCommand('fault-rules.updateApiKey', updateApiKey),
-    vscode.commands.registerCommand('fault-rules.analyzeFile', analyzeCurrentFile),
-    vscode.commands.registerCommand('fault-rules.analyzeProject', analyzeProject),
-    vscode.commands.registerCommand('fault-rules.showReadinessScore', showReadinessScore),
-    vscode.commands.registerCommand('fault-rules.explainRule', explainRule),
-    vscode.commands.registerCommand('fault-rules.explainBatch', explainBatch),
-    vscode.commands.registerCommand('fault-rules.applyFix', applyFix),
-    vscode.commands.registerCommand('fault-rules.applyProposedFix', applyProposedFix)
+    vscode.commands.registerCommand('unfault.showHome', showHome),
+    vscode.commands.registerCommand('unfault.login', login),
+    vscode.commands.registerCommand('unfault.logout', logout),
+    vscode.commands.registerCommand('unfault.updateApiKey', updateApiKey),
+    vscode.commands.registerCommand('unfault.analyzeFile', analyzeCurrentFile),
+    vscode.commands.registerCommand('unfault.analyzeProject', analyzeProject),
+    vscode.commands.registerCommand('unfault.showReadinessScore', showReadinessScore),
+    vscode.commands.registerCommand('unfault.explainRule', explainRule),
+    vscode.commands.registerCommand('unfault.explainBatch', explainBatch),
+    vscode.commands.registerCommand('unfault.applyFix', applyFix),
+    vscode.commands.registerCommand('unfault.applyProposedFix', applyProposedFix)
   );
 
   // Register document save handler
@@ -118,14 +118,18 @@ async function checkApiHealth() {
   const isHealthy = await apiClient.healthCheck();
   if (!isHealthy) {
     const config = vscode.workspace.getConfiguration('unfault');
-    const endpoint = config.get<string>('apiEndpoint');
+    const analysisMode = config.get<string>('analysisMode', 'local');
+    
+    const message = analysisMode === 'local'
+      ? 'Cannot connect to local Unfault API. Make sure the local server is running on http://localhost:8080'
+      : 'Cannot connect to cloud Unfault API at https://app.unfault.dev/api. Check your internet connection and try again.';
     
     vscode.window.showWarningMessage(
-      `Cannot connect to Unfault API at ${endpoint}. Some features may not work.`,
+      message,
       'Open Settings'
     ).then(action => {
       if (action === 'Open Settings') {
-        vscode.commands.executeCommand('workbench.action.openSettings', 'unfault.apiEndpoint');
+        vscode.commands.executeCommand('workbench.action.openSettings', 'unfault.analysisMode');
       }
     });
   }

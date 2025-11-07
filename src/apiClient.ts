@@ -41,7 +41,7 @@ export class FaultRulesApiClient {
 
     // Update client when configuration changes
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('unfault.apiEndpoint')) {
+      if (e.affectsConfiguration('unfault.analysisMode') || e.affectsConfiguration('unfault.apiEndpoint')) {
         this.baseUrl = this.getApiEndpoint();
         this.client.defaults.baseURL = this.baseUrl;
       }
@@ -158,7 +158,20 @@ export class FaultRulesApiClient {
 
   private getApiEndpoint(): string {
     const config = vscode.workspace.getConfiguration('unfault');
-    return config.get<string>('apiEndpoint', 'http://localhost:8080/api/v1');
+    const analysisMode = config.get<string>('analysisMode', 'local');
+    
+    // Development mode: use local server
+    if (analysisMode === 'local') {
+      return 'http://localhost:8080/api/v1';
+    }
+    
+    // Production mode: use fixed cloud API endpoint
+    return 'https://app.unfault.dev/api';
+  }
+  
+  private getAnalysisMode(): string {
+    const config = vscode.workspace.getConfiguration('unfault');
+    return config.get<string>('analysisMode', 'local');
   }
 
   /**

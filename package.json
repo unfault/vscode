@@ -1,9 +1,13 @@
 {
-  "name": "unfault-core",
-  "displayName": "Unfault Core",
+  "name": "unfault",
+  "displayName": "Unfault",
   "description": "Production readiness analysis and automated fixes for your code",
   "version": "0.1.0",
   "publisher": "unfault",
+  "author": {
+    "name": "Sylvain",
+    "email": "sylvain@unfault.dev"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -26,58 +30,59 @@
     "onLanguage:go",
     "onLanguage:rust",
     "onLanguage:java",
-    "onCommand:unfault-core.analyzeFile",
-    "onCommand:unfault-core.analyzeProject",
-    "onCommand:unfault-core.showReadinessScore"
+    "onCommand:unfault.analyzeFile",
+    "onCommand:unfault.analyzeProject",
+    "onCommand:unfault.showReadinessScore"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "unfault-core.showHome",
-        "title": "Unfault Core: Show Home",
+        "command": "unfault.showHome",
+        "title": "Unfault: Show Home",
         "icon": "$(home)"
       },
       {
-        "command": "unfault-core.login",
-        "title": "Unfault Core: Login"
+        "command": "unfault.login",
+        "title": "Unfault: Login"
       },
       {
-        "command": "unfault-core.logout",
-        "title": "Unfault Core: Logout"
+        "command": "unfault.logout",
+        "title": "Unfault: Logout"
       },
       {
-        "command": "unfault-core.updateApiKey",
-        "title": "Unfault Core: Update API Key"
+        "command": "unfault.updateApiKey",
+        "title": "Unfault: Update API Key"
       },
       {
-        "command": "unfault-core.analyzeFile",
-        "title": "Unfault Core: Analyze Current File"
+        "command": "unfault.analyzeFile",
+        "title": "Unfault: Analyze Current File"
       },
       {
-        "command": "unfault-core.analyzeProject",
-        "title": "Unfault Core: Analyze Entire Project"
+        "command": "unfault.analyzeProject",
+        "title": "Unfault: Analyze Entire Project"
       },
       {
-        "command": "unfault-core.showReadinessScore",
-        "title": "Unfault Core: Show Production Readiness Score"
+        "command": "unfault.showReadinessScore",
+        "title": "Unfault: Show Production Readiness Score"
       },
       {
-        "command": "unfault-core.explainRule",
-        "title": "Unfault Core: Explain Rule"
+        "command": "unfault.explainRule",
+        "title": "Unfault: Explain Rule"
       },
       {
-        "command": "unfault-core.applyFix",
-        "title": "Unfault Core: Apply Fix"
+        "command": "unfault.applyFix",
+        "title": "Unfault: Apply Fix"
       }
     ],
     "configuration": {
-      "title": "Unfault Core",
+      "title": "Unfault",
       "properties": {
-        "unfault.apiEndpoint": {
+        "unfault.analysisMode": {
           "type": "string",
-          "default": "http://localhost:8080/api/v1",
-          "description": "API endpoint for the Unfault Core analysis backend"
+          "enum": ["local", "cloud"],
+          "default": "local",
+          "description": "Analysis mode: local (development) or cloud (production)"
         },
         "unfault.autoAnalyze": {
           "type": "boolean",
@@ -141,11 +146,13 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "compile:dev": "export NODE_ENV=development && tsc -p ./ && node build-config.js",
+    "compile:prod": "export NODE_ENV=production && tsc -p ./ && node build-config.js",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "node ./out/test/runTest.js",
     "lint": "eslint src --ext ts",
-    "package": "vsce package"
+    "package": "npm run compile:prod && vsce package"
   },
   "dependencies": {
     "axios": "^1.6.0",
@@ -163,7 +170,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/fault-dev/unfault-core"
+    "url": "https://github.com/unfault/vscode"
   },
-  "license": "MIT"
+  "license": "Apache-2.0"
 }

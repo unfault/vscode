@@ -5,6 +5,9 @@
 import * as vscode from 'vscode';
 import * as child_process from 'child_process';
 import * as util from 'util';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 const exec = util.promisify(child_process.exec);
 
@@ -44,6 +47,48 @@ export class AuthManager {
         authenticated: true,
         method: 'api_key',
       };
+    }
+
+    // Fallback: Try to read API key from user's Unfault config (created by "unfault login")
+    try {
+      const home = os.homedir();
+      let configPath: string | undefined;
+
+      if (process.platform === 'darwin') {
+        configPath = path.join(home, 'Library', 'Application Support', 'unfault', 'config.toml');
+      } else if (process.platform === 'win32') {
+        const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+        configPath = path.join(appData, 'unfault', 'config.toml');
+      } else {
+        // linux and others
+        configPath = path.join(home, '.config', 'unfault', 'config.toml');
+      }
+
+      if (configPath) {
+        const content = await fs.promises.readFile(configPath, 'utf8').catch(() => undefined);
+        if (content) {
+          // Minimal TOML parsing for required keys
+          const apiKeyMatch =
+            content.match(/^\s*api_key\s*=\s*"(.*?)"\s*$/m) ||
+            content.match(/^\s*api_key\s*=\s*([^\s#]+)\s*$/m);
+          
+          if (apiKeyMatch && apiKeyMatch[1]) {
+            const apiKeyFromConfig = apiKeyMatch[1].trim();
+            if (apiKeyFromConfig) {
+              await this.context.secrets.store(API_KEY_SECRET, apiKeyFromConfig);
+              await this.context.globalState.update(AUTH_METHOD_KEY, 'api_key');
+              this.apiKey = apiKeyFromConfig;
+              this.outputChannel.appendLine(`Loaded API key from config: ${configPath}`);
+              return {
+                authenticated: true,
+                method: 'api_key',
+              };
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      this.outputChannel.appendLine(`Failed to read config.toml: ${err?.message || String(err)}`);
     }
 
     // Check if user is authenticated via unfault CLI

@@ -9,7 +9,7 @@ export class FaultRulesDiagnostics {
   private diagnosticCollection: vscode.DiagnosticCollection;
 
   constructor() {
-    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('fault-rules');
+    this.diagnosticCollection = vscode.languages.createDiagnosticCollection('unfault');
   }
 
   /**
@@ -111,7 +111,7 @@ export class FaultRulesDiagnostics {
           this.convertSeverity(finding.severity)
         );
 
-        diagnostic.source = 'fault-rules';
+        diagnostic.source = 'unfault';
         diagnostic.code = finding.rule_id;
         
         // Store finding for code actions

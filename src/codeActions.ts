@@ -26,7 +26,7 @@ export class FaultRulesCodeActionProvider implements vscode.CodeActionProvider {
     // Collect all findings from diagnostics in context
     // (These are the diagnostics that would show up in the quick fix menu)
     for (const diagnostic of context.diagnostics) {
-      if (diagnostic.source !== 'fault-rules') {
+      if (diagnostic.source !== 'unfault') {
         continue;
       }
 
@@ -87,7 +87,7 @@ export class FaultRulesCodeActionProvider implements vscode.CodeActionProvider {
       vscode.CodeActionKind.QuickFix
     );
     action.command = {
-      command: 'fault-rules.explainBatch',
+      command: 'unfault.explainBatch',
       title: 'Explain Operational Posture',
       arguments: [ruleIds, findings],
     };
@@ -105,7 +105,7 @@ export class FaultRulesCodeActionProvider implements vscode.CodeActionProvider {
       vscode.CodeActionKind.QuickFix
     );
     action.command = {
-      command: 'fault-rules.explainRule',
+      command: 'unfault.explainRule',
       title: 'Explain Rule',
       arguments: [finding.rule_id || finding.title],
     };
@@ -129,14 +129,14 @@ export class FaultRulesCodeActionProvider implements vscode.CodeActionProvider {
       // Parse and apply the unified diff
       // For now, store the diff for manual application
       action.command = {
-        command: 'fault-rules.applyFix',
+        command: 'unfault.applyFix',
         title: 'Apply Fix',
         arguments: [finding, document.uri],
       };
     } else {
       // Otherwise, fetch the proposed change from API
       action.command = {
-        command: 'fault-rules.applyFix',
+        command: 'unfault.applyFix',
         title: 'Apply Fix',
         arguments: [finding, document.uri],
       };
@@ -164,7 +164,7 @@ export class FaultRulesCodeActionProvider implements vscode.CodeActionProvider {
       );
 
       action.command = {
-        command: 'fault-rules.applyProposedFix',
+        command: 'unfault.applyProposedFix',
         title: 'Apply Proposed Fix',
         arguments: [proposedFix, finding, document.uri],
       };
@@ -185,7 +185,7 @@ export class FaultRulesCodeActionProvider implements vscode.CodeActionProvider {
       );
 
       action.command = {
-        command: 'fault-rules.applyProposedFix',
+        command: 'unfault.applyProposedFix',
         title: 'Apply Proposed Fix',
         arguments: [proposedFix, finding, document.uri],
       };

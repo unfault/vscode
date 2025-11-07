@@ -27,7 +27,7 @@ Two workflows are configured:
 6. **Artifact upload** - Uploads the packaged extension (Node.js 20.x only)
 
 ### Artifacts
-- **Name:** `unfault-core-vsix`
+- **Name:** `unfault-vsix`
 - **Contains:** The packaged `.vsix` file
 - **Retention:** 30 days
 - **Use case:** Download to manually test the extension before release
