@@ -36,17 +36,19 @@ jobs:
     - name: Package extension
       run: npm run package
     
-    - name: Publish to VSCode Marketplace
-      env:
-        VSCE_PAT: ${{ secrets.VSCE_PAT }}
-      run: |
-        npx vsce publish -p $VSCE_PAT
-    
-    - name: Upload VSIX to Release
+    - name: Create GitHub Release with VSIX
       uses: softprops/action-gh-release@v1
       with:
         files: '*.vsix'
         token: ${{ secrets.GITHUB_TOKEN }}
+        fail_on_unmatched_files: true
+        generate_release_notes: true
+    
+    - name: Publish to VSCode Marketplace
+      env:
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      run: |
+        npx vsce publish --packagePath $(ls *.vsix) -p $VSCE_PAT
     
     - name: Publish Summary
       run: |

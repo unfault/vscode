@@ -5,6 +5,13 @@ All notable changes to the Unfault VS Code extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2025-11-07
+
+### Fixed
+- Fixed GitHub Actions publish workflow to prevent duplicate release creation
+- Modified workflow to create GitHub release before VSCode Marketplace publish
+- Changed `vsce publish` to use pre-packaged .vsix file to avoid automatic release creation
+
 ## [0.1.7] - 2025-11-07
 
 ### Changed
@@ -79,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical Details
 - Minimum VS Code version: 1.75.0
+[0.1.8]: https://github.com/unfault/vscode/releases/tag/v0.1.8
 [0.1.7]: https://github.com/unfault/vscode/releases/tag/v0.1.7
 [0.1.6]: https://github.com/unfault/vscode/releases/tag/v0.1.6
 [0.1.5]: https://github.com/unfault/vscode/releases/tag/v0.1.5
