@@ -2,7 +2,7 @@
   "name": "unfault",
   "displayName": "Unfault",
   "description": "Production readiness analysis and automated fixes for your code",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "unfault",
   "author": {
     "name": "Sylvain",
