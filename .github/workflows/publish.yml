@@ -39,19 +39,27 @@ jobs:
     - name: Package extension
       run: npm run package
     
-    - name: Ensure GitHub Release and upload VSIX
+    - name: Ensure GitHub Release and upload VSIX (immutable-safe)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         set -euo pipefail
         TAG="${{ github.ref_name }}"
         VSIX_FILE="$(ls *.vsix)"
-        if gh release view "$TAG" >/dev/null 2>&1; then
-          echo "Release $TAG exists. Uploading asset with --clobber"
-          gh release upload "$TAG" "$VSIX_FILE" --clobber
+        # Determine if release exists and whether it's draft
+        IS_DRAFT="$(gh release view "$TAG" --json isDraft -q '.isDraft' 2>/dev/null || echo "")"
+        if [ -n "$IS_DRAFT" ]; then
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "Draft release $TAG exists. Uploading asset (clobber) and publishing..."
+            gh release upload "$TAG" "$VSIX_FILE" --clobber
+            gh release edit "$TAG" --draft=false
+          else
+            echo "Published (immutable) release $TAG exists. Skipping asset upload to avoid 422."
+          fi
         else
-          echo "Creating release $TAG and uploading asset"
-          gh release create "$TAG" "$VSIX_FILE" --title "$TAG" --notes "Automated release for $TAG" --latest
+          echo "Creating DRAFT release $TAG with asset, then publishing (immutable-safe)..."
+          gh release create "$TAG" "$VSIX_FILE" --title "$TAG" --notes "Automated release for $TAG" --draft
+          gh release edit "$TAG" --draft=false
         fi
     
     - name: Publish to VSCode Marketplace

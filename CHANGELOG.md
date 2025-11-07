@@ -5,6 +5,14 @@ All notable changes to the Unfault VS Code extension will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2025-11-07
+
+### Fixed
+- Hardened publish pipeline to be immutable-safe and idempotent using GitHub CLI
+- Avoid 422 errors by only attaching assets while release is draft; skip upload if already published
+- Concurrency guard to prevent overlapping runs on the same tag
+- Publish to Marketplace using the pre-built VSIX (`--packagePath`)
+
 ## [0.1.9] - 2025-11-07
 
 ### Fixed
@@ -94,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical Details
 - Minimum VS Code version: 1.75.0
+[0.1.10]: https://github.com/unfault/vscode/releases/tag/v0.1.10
 [0.1.9]: https://github.com/unfault/vscode/releases/tag/v0.1.9
 [0.1.8]: https://github.com/unfault/vscode/releases/tag/v0.1.8
 [0.1.7]: https://github.com/unfault/vscode/releases/tag/v0.1.7
