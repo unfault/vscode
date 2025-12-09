@@ -13,6 +13,7 @@
     "url": "https://github.com/unfault-dev/unfault/issues"
   },
   "license": "MIT",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -102,9 +103,7 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "package": "vsce package",
-    "compile:dev": "export NODE_ENV=development && tsc -p ./ && node build-config.js",
-    "compile:prod": "export NODE_ENV=production && tsc -p ./ && node build-config.js"
+    "package": "vsce package"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

@@ -34,7 +34,7 @@ jobs:
       run: npm run lint
     
     - name: Compile TypeScript (Production)
-      run: npm run compile:prod
+      run: npm run compile
     
     - name: Package extension
       run: npm run package
