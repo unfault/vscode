@@ -102,7 +102,9 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "package": "vsce package"
+    "package": "vsce package",
+    "compile:dev": "export NODE_ENV=development && tsc -p ./ && node build-config.js",
+    "compile:prod": "export NODE_ENV=production && tsc -p ./ && node build-config.js"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
