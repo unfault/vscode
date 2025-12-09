@@ -1,0 +1,76 @@
+name: Publish to VSCode Marketplace
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    environment: release
+
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    
+    permissions:
+      contents: write  # Required to upload release assets
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linter
+      run: npm run lint
+    
+    - name: Compile TypeScript (Production)
+      run: npm run compile:prod
+    
+    - name: Package extension
+      run: npm run package
+    
+    - name: Ensure GitHub Release and upload VSIX (immutable-safe)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+        TAG="${{ github.ref_name }}"
+        VSIX_FILE="$(ls *.vsix)"
+        # Determine if release exists and whether it's draft
+        IS_DRAFT="$(gh release view "$TAG" --json isDraft -q '.isDraft' 2>/dev/null || echo "")"
+        if [ -n "$IS_DRAFT" ]; then
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "Draft release $TAG exists. Uploading asset (clobber) and publishing..."
+            gh release upload "$TAG" "$VSIX_FILE" --clobber
+            gh release edit "$TAG" --draft=false
+          else
+            echo "Published (immutable) release $TAG exists. Skipping asset upload to avoid 422."
+          fi
+        else
+          echo "Creating DRAFT release $TAG with asset, then publishing (immutable-safe)..."
+          gh release create "$TAG" "$VSIX_FILE" --title "$TAG" --notes "Automated release for $TAG" --draft
+          gh release edit "$TAG" --draft=false
+        fi
+    
+    - name: Publish to VSCode Marketplace
+      env:
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      run: |
+        npx vsce publish --packagePath $(ls *.vsix) -p $VSCE_PAT
+    
+    - name: Publish Summary
+      run: |
+        echo "✅ Extension published successfully to VSCode Marketplace!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Package Details:**" >> $GITHUB_STEP_SUMMARY
+        ls -lh *.vsix >> $GITHUB_STEP_SUMMARY

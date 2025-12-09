@@ -1,0 +1,117 @@
+{
+  "name": "unfault",
+  "displayName": "Unfault",
+  "description": "Production-readiness linting for your code - detect stability, performance, and reliability issues before they reach production",
+  "version": "0.1.0",
+  "publisher": "unfault",
+  "homepage": "https://unfault.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unfault-dev/unfault"
+  },
+  "bugs": {
+    "url": "https://github.com/unfault-dev/unfault/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "linter",
+    "production-readiness",
+    "stability",
+    "performance",
+    "reliability",
+    "python",
+    "go",
+    "rust",
+    "typescript"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Unfault",
+      "properties": {
+        "unfault.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable Unfault diagnostics"
+        },
+        "unfault.apiUrl": {
+          "type": "string",
+          "default": "",
+          "description": "URL of the Unfault API server (leave empty to use config file or default)"
+        },
+        "unfault.analyzeOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Analyze files when saved"
+        },
+        "unfault.analyzeOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Analyze files when opened"
+        },
+        "unfault.debounceMs": {
+          "type": "number",
+          "default": 500,
+          "description": "Debounce time in milliseconds before analyzing"
+        },
+        "unfault.profile": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "python_lsp", "go_lsp", "rust_lsp", "typescript_lsp"],
+          "description": "Profile to use for analysis (auto = detect from language)"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "unfault.analyzeFile",
+        "title": "Unfault: Analyze Current File"
+      },
+      {
+        "command": "unfault.analyzeWorkspace",
+        "title": "Unfault: Analyze All Open Files"
+      },
+      {
+        "command": "unfault.clearDiagnostics",
+        "title": "Unfault: Clear Diagnostics"
+      },
+      {
+        "command": "unfault.showWelcome",
+        "title": "Unfault: Setup / Configure API Key"
+      },
+      {
+        "command": "unfault.refreshConfig",
+        "title": "Unfault: Refresh Configuration"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.2"
+  }
+}
