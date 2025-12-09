@@ -142,14 +142,14 @@ If you see authentication errors:
 ### Building from Source
 
 ```bash
-cd vscode-extension
+cd vscode
 npm install
 npm run compile
 ```
 
 ### Running in Development
 
-1. Open the `vscode-extension` folder in VS Code
+1. Open the `vscode` folder in VS Code
 2. Press F5 to launch the Extension Development Host
 3. The extension will be loaded in a new VS Code window
 
