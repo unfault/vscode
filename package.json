@@ -2,15 +2,15 @@
   "name": "unfault",
   "displayName": "Unfault",
   "description": "Production-readiness linting for your code - detect stability, performance, and reliability issues before they reach production",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "unfault",
   "homepage": "https://unfault.dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/unfault-dev/unfault"
+    "url": "https://github.com/unfault/vscode"
   },
   "bugs": {
-    "url": "https://github.com/unfault-dev/unfault/issues"
+    "url": "https://github.com/unfault/vscode/issues"
   },
   "license": "MIT",
   "icon": "images/icon.png",

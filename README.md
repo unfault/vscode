@@ -175,5 +175,5 @@ MIT
 
 - [Unfault Website](https://unfault.dev)
 - [Documentation](https://unfault.dev/docs)
-- [GitHub Repository](https://github.com/unfault-dev/unfault)
-- [Issue Tracker](https://github.com/unfault-dev/unfault/issues)
+- [GitHub Repository](https://github.com/unfault/vscode)
+- [Issue Tracker](https://github.com/unfault/vscode/issues)
