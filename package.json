@@ -2,7 +2,7 @@
   "name": "unfault",
   "displayName": "Unfault",
   "description": "Production-readiness linting for your code - detect stability, performance, and reliability issues before they reach production",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "publisher": "unfault",
   "homepage": "https://unfault.dev",
   "repository": {
