@@ -43,6 +43,11 @@
   "contributes": {
     "commands": [
       {
+        "command": "unfault.showWelcome",
+        "title": "Welcome & Setup",
+        "category": "Unfault"
+      },
+      {
         "command": "unfault.restartServer",
         "title": "Restart Unfault LSP Server",
         "category": "Unfault"

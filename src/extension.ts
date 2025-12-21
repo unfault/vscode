@@ -10,6 +10,7 @@
  * - Real-time diagnostics via LSP
  * - Code actions for quick fixes
  * - Status bar showing Unfault status and diagnostics count
+ * - Welcome panel for onboarding and authentication
  */
 
 import * as vscode from 'vscode';
@@ -20,6 +21,7 @@ import {
   State,
   TransportKind
 } from 'vscode-languageclient/node';
+import { WelcomePanel } from './welcomePanel';
 
 let client: LanguageClient;
 let statusBarItem: vscode.StatusBarItem;
@@ -266,9 +268,19 @@ export function activate(context: vscode.ExtensionContext) {
     updateStatusBar();
   });
 
+  // Register command to show welcome panel
+  const showWelcomeCommand = vscode.commands.registerCommand('unfault.showWelcome', () => {
+    WelcomePanel.createOrShow(context.extensionUri);
+  });
+  context.subscriptions.push(showWelcomeCommand);
+
   // Register command to show menu
   const showMenuCommand = vscode.commands.registerCommand('unfault.showMenu', async () => {
     const items: vscode.QuickPickItem[] = [
+      {
+        label: '$(home) Welcome & Setup',
+        description: 'Open the Unfault welcome panel'
+      },
       {
         label: '$(gear) Open Settings',
         description: 'Configure Unfault extension settings'
@@ -293,6 +305,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (selected) {
       switch (selected.label) {
+        case '$(home) Welcome & Setup':
+          WelcomePanel.createOrShow(context.extensionUri);
+          break;
         case '$(gear) Open Settings':
           vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
           break;

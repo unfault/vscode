@@ -20,9 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Server State Feedback**: Shows loading spinner when starting, warning state when stopped or on error
 - **File Centrality Display**: When graph data is available, shows hub/star icons for important files
 - **New Commands**:
+  - `unfault.showWelcome` - Opens the welcome & setup panel
   - `unfault.showMenu` - Opens the quick pick menu
   - `unfault.showOutput` - Shows LSP output panel
   - `unfault.openSettings` - Opens Unfault settings
+- **Welcome Panel**: Re-introduced onboarding panel with:
+  - Authentication status display
+  - Easy setup for `unfault login` or API key configuration
+  - Links to documentation
+  - Access via status bar menu → "Welcome & Setup"
 
 ### Changed
 
