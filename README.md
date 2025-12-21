@@ -6,6 +6,7 @@ Production-readiness linting for your code. Detect stability, performance, and r
 
 - **Real-time Analysis**: Get instant feedback as you code with diagnostics that appear in your editor
 - **Quick Fixes**: Apply suggested fixes with a single click using VS Code's code actions
+- **File Centrality**: See file importance and impact in the status bar (e.g., "Hub file", "Leaf file")
 - **Multi-language Support**: Python, Go, Rust, TypeScript, and JavaScript
 - **Privacy First**: Code is parsed locally by the CLI, only analyzed IR is sent to the Unfault API
 
@@ -35,14 +36,16 @@ Production-readiness linting for your code. Detect stability, performance, and r
 
 ## How It Works
 
-The extension runs the Unfault CLI in LSP (Language Server Protocol) mode:
+**The extension automatically manages everything for you.** When you open a supported file:
 
-1. **Client-side parsing**: Your code is parsed locally by the CLI
-2. **IR analysis**: Only analyzed IR is sent to the Unfault API
-3. **Findings returned**: The API returns findings with suggested fixes
-4. **Diagnostics displayed**: Findings appear as diagnostics in VS Code
+1. The extension **automatically starts** the Unfault CLI in LSP mode (you don't need to run anything manually)
+2. **Client-side parsing**: Your code is parsed locally by the CLI
+3. **IR analysis**: Only analyzed IR is sent to the Unfault API (no source code leaves your machine)
+4. **Findings returned**: The API returns findings with suggested fixes
+5. **Diagnostics displayed**: Findings appear as squiggly underlines in VS Code
+6. **Status bar**: Shows file centrality (e.g., "Hub file (12 importers)")
 
-This architecture ensures your source code never leaves your machine.
+When you close VS Code, the server shuts down automatically.
 
 ## Supported Languages
 

@@ -9,7 +9,7 @@
  * Features:
  * - Real-time diagnostics via LSP
  * - Code actions for quick fixes
- * - Status bar showing file importance/centrality
+ * - Status bar showing Unfault status and diagnostics count
  */
 
 import * as vscode from 'vscode';
@@ -17,6 +17,7 @@ import {
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
+  State,
   TransportKind
 } from 'vscode-languageclient/node';
 
@@ -35,6 +36,12 @@ interface FileCentralityNotification {
   label: string;
 }
 
+// Track current centrality for the active file
+let currentCentrality: FileCentralityNotification | null = null;
+
+// Track server state
+let serverState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
+
 /**
  * Get the path to the unfault binary from configuration.
  */
@@ -44,48 +51,151 @@ function getUnfaultPath(): string {
 }
 
 /**
- * Create and configure the status bar item for file centrality
+ * Create and configure the status bar item
  */
 function createStatusBarItem(): vscode.StatusBarItem {
   const item = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Right,
     100
   );
-  item.name = 'Unfault File Centrality';
-  item.tooltip = 'File importance in the codebase';
+  item.name = 'Unfault';
   return item;
 }
 
 /**
- * Update the status bar with file centrality information
+ * Update the status bar based on current state
  */
-function updateStatusBar(centrality: FileCentralityNotification | null) {
-  if (!centrality) {
-    statusBarItem.hide();
+function updateStatusBar() {
+  const editor = vscode.window.activeTextEditor;
+  const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
+  
+  // Check if we're in a supported file
+  const isSupported = editor && supportedLanguages.includes(editor.document.languageId);
+
+  // Always show status bar, but with different content based on state
+  if (serverState === 'stopped' || serverState === 'error') {
+    statusBarItem.text = '$(shield) Unfault';
+    statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+    statusBarItem.tooltip = serverState === 'error' 
+      ? 'Unfault LSP server failed to start. Click to see options.'
+      : 'Unfault LSP server is not running. Click to restart.';
+    statusBarItem.command = 'unfault.showMenu';
+    statusBarItem.show();
     return;
   }
 
-  // Format the status bar text
-  const icon = centrality.in_degree > 10 ? '$(hub)' :
-               centrality.in_degree > 5 ? '$(star)' :
-               centrality.in_degree > 0 ? '$(file-symlink-file)' :
-               '$(file)';
+  if (serverState === 'starting') {
+    statusBarItem.text = '$(loading~spin) Unfault';
+    statusBarItem.backgroundColor = undefined;
+    statusBarItem.tooltip = 'Unfault LSP server is starting...';
+    statusBarItem.command = 'unfault.showMenu';
+    statusBarItem.show();
+    return;
+  }
 
-  statusBarItem.text = `${icon} ${centrality.label}`;
-  statusBarItem.tooltip = new vscode.MarkdownString(
-    `**File Importance**\n\n` +
-    `- Imported by: ${centrality.in_degree} files\n` +
-    `- Imports: ${centrality.out_degree} files\n` +
-    `- Importance score: ${centrality.importance_score}\n` +
-    `- Total files: ${centrality.total_files}`
-  );
+  // Server is running
+  if (!isSupported) {
+    // Show minimal status bar for unsupported files
+    statusBarItem.text = '$(shield) Unfault';
+    statusBarItem.backgroundColor = undefined;
+    statusBarItem.tooltip = 'Unfault - Production readiness linting\nOpen a supported file (Python, Go, Rust, TypeScript, JavaScript) to see diagnostics.';
+    statusBarItem.command = 'unfault.showMenu';
+    statusBarItem.show();
+    return;
+  }
+
+  // Get diagnostics for the current file
+  const diagnostics = vscode.languages.getDiagnostics(editor!.document.uri)
+    .filter(d => d.source === 'unfault');
+  
+  const issueCount = diagnostics.length;
+  const errorCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
+  const warningCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
+
+  // Build status text
+  let text = '$(shield) Unfault';
+  let tooltipParts: string[] = ['**Unfault Status**\n'];
+
+  if (issueCount === 0) {
+    text = '$(shield) Unfault ✓';
+    statusBarItem.backgroundColor = undefined;
+    tooltipParts.push('No issues found in this file');
+  } else {
+    text = `$(shield) Unfault: ${issueCount}`;
+    statusBarItem.backgroundColor = errorCount > 0 
+      ? new vscode.ThemeColor('statusBarItem.errorBackground')
+      : warningCount > 0 
+        ? new vscode.ThemeColor('statusBarItem.warningBackground')
+        : undefined;
+    
+    if (errorCount > 0) {
+      tooltipParts.push(`- ${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    }
+    if (warningCount > 0) {
+      tooltipParts.push(`- ${warningCount} warning${warningCount > 1 ? 's' : ''}`);
+    }
+    const infoCount = issueCount - errorCount - warningCount;
+    if (infoCount > 0) {
+      tooltipParts.push(`- ${infoCount} info`);
+    }
+  }
+
+  // Add centrality info if available
+  if (currentCentrality) {
+    tooltipParts.push('\n**File Importance**');
+    tooltipParts.push(`- Imported by: ${currentCentrality.in_degree} files`);
+    tooltipParts.push(`- Imports: ${currentCentrality.out_degree} files`);
+    
+    // Add centrality indicator to text
+    if (currentCentrality.in_degree > 10) {
+      text += ' $(hub)';
+    } else if (currentCentrality.in_degree > 5) {
+      text += ' $(star)';
+    }
+  }
+
+  tooltipParts.push('\n---\nClick for options');
+
+  statusBarItem.text = text;
+  statusBarItem.tooltip = new vscode.MarkdownString(tooltipParts.join('\n'));
+  statusBarItem.command = 'unfault.showMenu';
   statusBarItem.show();
+}
+
+/**
+ * Set centrality for the current file
+ */
+function setCentrality(centrality: FileCentralityNotification | null) {
+  currentCentrality = centrality;
+  updateStatusBar();
+}
+
+/**
+ * Register LSP client handlers
+ */
+function registerClientHandlers(lspClient: LanguageClient) {
+  lspClient.onDidChangeState((e) => {
+    if (e.newState === State.Running) {
+      serverState = 'running';
+      updateStatusBar();
+    } else if (e.newState === State.Stopped) {
+      serverState = 'stopped';
+      updateStatusBar();
+    }
+  });
+
+  lspClient.onNotification('unfault/fileCentrality', (params: FileCentralityNotification) => {
+    setCentrality(params);
+  });
 }
 
 export function activate(context: vscode.ExtensionContext) {
   // Create status bar item
   statusBarItem = createStatusBarItem();
   context.subscriptions.push(statusBarItem);
+
+  // Show initial status
+  updateStatusBar();
 
   // Get the command from configuration
   const command = getUnfaultPath();
@@ -130,36 +240,97 @@ export function activate(context: vscode.ExtensionContext) {
     clientOptions
   );
 
-  // Handle custom notifications from the server
-  client.onNotification('unfault/fileCentrality', (params: FileCentralityNotification) => {
-    updateStatusBar(params);
-  });
+  // Register handlers
+  registerClientHandlers(client);
 
-  // Clear status bar when active editor changes to unsupported file
+  // Update status bar when diagnostics change
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor((editor) => {
-      if (!editor) {
-        updateStatusBar(null);
-        return;
-      }
+    vscode.languages.onDidChangeDiagnostics(() => {
+      updateStatusBar();
+    })
+  );
 
-      const lang = editor.document.languageId;
-      const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
-      if (!supportedLanguages.includes(lang)) {
-        updateStatusBar(null);
-      }
-      // For supported languages, we'll get a notification from the server
+  // Update status bar when active editor changes
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      // Clear centrality when switching files (will be updated by server)
+      currentCentrality = null;
+      updateStatusBar();
     })
   );
 
   // Start the client. This will also launch the server
-  client.start();
+  client.start().catch((err) => {
+    console.error('Failed to start Unfault LSP client:', err);
+    serverState = 'error';
+    updateStatusBar();
+  });
+
+  // Register command to show menu
+  const showMenuCommand = vscode.commands.registerCommand('unfault.showMenu', async () => {
+    const items: vscode.QuickPickItem[] = [
+      {
+        label: '$(gear) Open Settings',
+        description: 'Configure Unfault extension settings'
+      },
+      {
+        label: '$(output) Show Output',
+        description: 'Show Unfault LSP output log'
+      },
+      {
+        label: '$(refresh) Restart Server',
+        description: 'Restart the Unfault LSP server'
+      },
+      {
+        label: '$(book) Documentation',
+        description: 'Open Unfault documentation'
+      }
+    ];
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Unfault - Select an action'
+    });
+
+    if (selected) {
+      switch (selected.label) {
+        case '$(gear) Open Settings':
+          vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
+          break;
+        case '$(output) Show Output':
+          client.outputChannel.show();
+          break;
+        case '$(refresh) Restart Server':
+          vscode.commands.executeCommand('unfault.restartServer');
+          break;
+        case '$(book) Documentation':
+          vscode.env.openExternal(vscode.Uri.parse('https://unfault.dev/docs'));
+          break;
+      }
+    }
+  });
+  context.subscriptions.push(showMenuCommand);
+
+  // Register command to show output
+  const showOutputCommand = vscode.commands.registerCommand('unfault.showOutput', () => {
+    client.outputChannel.show();
+  });
+  context.subscriptions.push(showOutputCommand);
+
+  // Register command to open settings
+  const openSettingsCommand = vscode.commands.registerCommand('unfault.openSettings', () => {
+    vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
+  });
+  context.subscriptions.push(openSettingsCommand);
 
   // Register command to restart the LSP server
   const restartCommand = vscode.commands.registerCommand('unfault.restartServer', async () => {
+    serverState = 'starting';
+    updateStatusBar();
+
     if (client) {
       await client.stop();
     }
+
     const command = getUnfaultPath();
     const args = ["lsp"];
     const serverOptions: ServerOptions = {
@@ -170,6 +341,7 @@ export function activate(context: vscode.ExtensionContext) {
         transport: TransportKind.stdio,
       }
     };
+
     client = new LanguageClient(
       'unfault',
       'Unfault LSP',
@@ -177,12 +349,15 @@ export function activate(context: vscode.ExtensionContext) {
       clientOptions
     );
 
-    // Re-register notification handler
-    client.onNotification('unfault/fileCentrality', (params: FileCentralityNotification) => {
-      updateStatusBar(params);
+    // Re-register handlers
+    registerClientHandlers(client);
+
+    client.start().catch((err) => {
+      console.error('Failed to restart Unfault LSP client:', err);
+      serverState = 'error';
+      updateStatusBar();
     });
 
-    client.start();
     vscode.window.showInformationMessage('Unfault LSP server restarted');
   });
 

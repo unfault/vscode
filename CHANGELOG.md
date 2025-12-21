@@ -5,6 +5,31 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-12-21
+
+### Added
+
+- **Persistent Status Bar**: The Unfault status bar item is now always visible, providing at-a-glance information about the extension state
+- **Status Bar Menu**: Click the status bar to access a quick pick menu with options:
+  - Open Settings
+  - Show Output (LSP server logs)
+  - Restart Server
+  - Documentation (opens https://unfault.dev/docs)
+- **Diagnostics Counter**: Status bar shows the number of issues found (e.g., "Unfault: 3")
+- **Visual Severity Indicators**: Status bar background color changes based on issue severity (red for errors, yellow for warnings)
+- **Server State Feedback**: Shows loading spinner when starting, warning state when stopped or on error
+- **File Centrality Display**: When graph data is available, shows hub/star icons for important files
+- **New Commands**:
+  - `unfault.showMenu` - Opens the quick pick menu
+  - `unfault.showOutput` - Shows LSP output panel
+  - `unfault.openSettings` - Opens Unfault settings
+
+### Changed
+
+- Status bar is now always visible (not just when issues are found)
+- Clicking status bar now opens a menu instead of just showing output
+- Improved tooltip with rich markdown information
+
 ## [0.6.0] - 2025-12-21
 
 ### Changed

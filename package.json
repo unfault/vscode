@@ -2,7 +2,7 @@
   "name": "unfault",
   "displayName": "Unfault",
   "description": "Production-readiness linting for your code - detect stability, performance, and reliability issues before they reach production",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "unfault",
   "homepage": "https://unfault.dev",
   "repository": {
@@ -45,6 +45,21 @@
       {
         "command": "unfault.restartServer",
         "title": "Restart Unfault LSP Server",
+        "category": "Unfault"
+      },
+      {
+        "command": "unfault.showMenu",
+        "title": "Show Unfault Menu",
+        "category": "Unfault"
+      },
+      {
+        "command": "unfault.showOutput",
+        "title": "Show Unfault Output",
+        "category": "Unfault"
+      },
+      {
+        "command": "unfault.openSettings",
+        "title": "Open Unfault Settings",
         "category": "Unfault"
       }
     ],
