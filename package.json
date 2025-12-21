@@ -2,7 +2,7 @@
   "name": "unfault",
   "displayName": "Unfault",
   "description": "Production-readiness linting for your code - detect stability, performance, and reliability issues before they reach production",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "unfault",
   "homepage": "https://unfault.dev",
   "repository": {
@@ -33,68 +33,41 @@
     "typescript"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onLanguage:python",
+    "onLanguage:go",
+    "onLanguage:rust",
+    "onLanguage:typescript",
+    "onLanguage:javascript"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "unfault.restartServer",
+        "title": "Restart Unfault LSP Server",
+        "category": "Unfault"
+      }
+    ],
     "configuration": {
       "title": "Unfault",
       "properties": {
-        "unfault.enable": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable/disable Unfault diagnostics"
-        },
-        "unfault.apiUrl": {
+        "unfault.executablePath": {
           "type": "string",
-          "default": "",
-          "description": "URL of the Unfault API server (leave empty to use config file or default)"
+          "default": "unfault",
+          "description": "Path to the unfault CLI executable. Can be just 'unfault' if it's in your PATH."
         },
-        "unfault.analyzeOnSave": {
-          "type": "boolean",
-          "default": true,
-          "description": "Analyze files when saved"
-        },
-        "unfault.analyzeOnOpen": {
-          "type": "boolean",
-          "default": true,
-          "description": "Analyze files when opened"
-        },
-        "unfault.debounceMs": {
-          "type": "number",
-          "default": 500,
-          "description": "Debounce time in milliseconds before analyzing"
-        },
-        "unfault.profile": {
+        "unfault.trace.server": {
           "type": "string",
-          "default": "auto",
-          "enum": ["auto", "python_lsp", "go_lsp", "rust_lsp", "typescript_lsp"],
-          "description": "Profile to use for analysis (auto = detect from language)"
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server."
         }
       }
-    },
-    "commands": [
-      {
-        "command": "unfault.analyzeFile",
-        "title": "Unfault: Analyze Current File"
-      },
-      {
-        "command": "unfault.analyzeWorkspace",
-        "title": "Unfault: Analyze All Open Files"
-      },
-      {
-        "command": "unfault.clearDiagnostics",
-        "title": "Unfault: Clear Diagnostics"
-      },
-      {
-        "command": "unfault.showWelcome",
-        "title": "Unfault: Setup / Configure API Key"
-      },
-      {
-        "command": "unfault.refreshConfig",
-        "title": "Unfault: Refresh Configuration"
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -104,6 +77,9 @@
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
     "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

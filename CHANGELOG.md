@@ -5,6 +5,26 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-12-21
+
+### Changed
+
+- **Architecture**: Migrated to a full Language Server Protocol (LSP) implementation
+- **Configuration**: Simplified settings. Now uses `unfault.executablePath` to point to the CLI
+- **Commands**: Removed manual analysis commands. Analysis is now automatic via LSP
+- **Activation**: Extension now activates on supported languages (Python, Go, Rust, TypeScript, JavaScript)
+
+### Removed
+
+- Removed `unfault.enable`, `unfault.apiUrl`, `unfault.analyzeOnSave`, `unfault.analyzeOnOpen`, `unfault.debounceMs`, `unfault.profile` settings
+- Removed manual analysis commands (`Unfault: Analyze Current File`, etc.)
+- Removed Welcome panel (configuration is now via settings)
+
+### Added
+
+- Added `unfault.restartServer` command
+- Added `vscode-languageclient` dependency
+
 ## [0.5.0] - 2025-12-09
 
 ### Added
