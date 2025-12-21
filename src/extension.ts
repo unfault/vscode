@@ -114,7 +114,7 @@ function updateStatusBar() {
 
   // Build status text
   let text = '$(shield) Unfault';
-  let tooltipParts: string[] = ['**Unfault Status**\n'];
+  const tooltipParts: string[] = ['**Unfault Status**\n'];
 
   if (issueCount === 0) {
     text = '$(shield) Unfault ✓';
