@@ -76,9 +76,9 @@ function updateStatusBar() {
 
   // Always show status bar, but with different content based on state
   if (serverState === 'stopped' || serverState === 'error') {
-    statusBarItem.text = '$(shield) Unfault';
+    statusBarItem.text = '$(unfault-logo)';
     statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    statusBarItem.tooltip = serverState === 'error' 
+    statusBarItem.tooltip = serverState === 'error'
       ? 'Unfault LSP server failed to start. Click to see options.'
       : 'Unfault LSP server is not running. Click to restart.';
     statusBarItem.command = 'unfault.showMenu';
@@ -87,7 +87,7 @@ function updateStatusBar() {
   }
 
   if (serverState === 'starting') {
-    statusBarItem.text = '$(loading~spin) Unfault';
+    statusBarItem.text = '$(unfault-logo) $(loading~spin)';
     statusBarItem.backgroundColor = undefined;
     statusBarItem.tooltip = 'Unfault LSP server is starting...';
     statusBarItem.command = 'unfault.showMenu';
@@ -98,7 +98,7 @@ function updateStatusBar() {
   // Server is running
   if (!isSupported) {
     // Show minimal status bar for unsupported files
-    statusBarItem.text = '$(shield) Unfault';
+    statusBarItem.text = '$(unfault-logo)';
     statusBarItem.backgroundColor = undefined;
     statusBarItem.tooltip = 'Unfault - Production readiness linting\nOpen a supported file (Python, Go, Rust, TypeScript, JavaScript) to see diagnostics.';
     statusBarItem.command = 'unfault.showMenu';
@@ -115,15 +115,15 @@ function updateStatusBar() {
   const warningCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
 
   // Build status text
-  let text = '$(shield) Unfault';
+  let text = '$(unfault-logo)';
   const tooltipParts: string[] = ['**Unfault Status**\n'];
 
   if (issueCount === 0) {
-    text = '$(shield) Unfault ✓';
+    text = '$(unfault-logo) ✓';
     statusBarItem.backgroundColor = undefined;
     tooltipParts.push('No issues found in this file');
   } else {
-    text = `$(shield) Unfault: ${issueCount}`;
+    text = `$(unfault-logo) ${issueCount}`;
     statusBarItem.backgroundColor = errorCount > 0 
       ? new vscode.ThemeColor('statusBarItem.errorBackground')
       : warningCount > 0 

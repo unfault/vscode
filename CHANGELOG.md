@@ -5,6 +5,18 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-12-22
+
+### Changed
+
+- **Status Bar**: Replaced "Unfault" text with logo icon to reduce screen real estate usage
+- Status bar now shows: logo only (idle/unsupported files), logo + ✓ (no issues), or logo + count (issues found)
+
+### Added
+
+- Custom icon font (`unfault-icons.woff2`) for the Unfault logo
+- Added `npm run icons` script to regenerate icon font from SVG sources
+
 ## [0.7.1] - 2025-12-21
 
 ### Fixed
