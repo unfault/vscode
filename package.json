@@ -75,6 +75,11 @@
         "command": "unfault.openSettings",
         "title": "Open Unfault Settings",
         "category": "Unfault"
+      },
+      {
+        "command": "unfault.showDependents",
+        "title": "Show Files That Depend on This File",
+        "category": "Unfault"
       }
     ],
     "configuration": {

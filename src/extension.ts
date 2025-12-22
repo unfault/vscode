@@ -38,8 +38,23 @@ interface FileCentralityNotification {
   label: string;
 }
 
+/**
+ * File dependencies notification from the LSP server
+ * Shows which files depend on the current file
+ */
+interface FileDependenciesNotification {
+  path: string;
+  direct_dependents: string[];
+  all_dependents: string[];
+  total_count: number;
+  summary: string;
+}
+
 // Track current centrality for the active file
 let currentCentrality: FileCentralityNotification | null = null;
+
+// Track current dependencies for the active file
+let currentDependencies: FileDependenciesNotification | null = null;
 
 // Track server state
 let serverState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
@@ -173,6 +188,68 @@ function setCentrality(centrality: FileCentralityNotification | null) {
 }
 
 /**
+ * Set dependencies for the current file and show info message
+ */
+function setDependencies(dependencies: FileDependenciesNotification | null) {
+  currentDependencies = dependencies;
+  
+  // Show an information message when a file has dependents
+  if (dependencies && dependencies.total_count > 0) {
+    const dependentsList = dependencies.direct_dependents.slice(0, 5);
+    let message = `📁 **${dependencies.total_count} file${dependencies.total_count > 1 ? 's' : ''} depend on this file**`;
+    
+    if (dependentsList.length > 0) {
+      message += '\n\nDirect dependents:\n';
+      message += dependentsList.map(d => `• ${d}`).join('\n');
+      if (dependencies.direct_dependents.length > 5) {
+        message += `\n... and ${dependencies.direct_dependents.length - 5} more`;
+      }
+    }
+    
+    // Show as information message with option to see all
+    vscode.window.showInformationMessage(
+      dependencies.summary,
+      'Show All Dependents'
+    ).then(selection => {
+      if (selection === 'Show All Dependents') {
+        showDependentsList(dependencies);
+      }
+    });
+  }
+}
+
+/**
+ * Show a quick pick list of all files that depend on the current file
+ */
+async function showDependentsList(dependencies: FileDependenciesNotification) {
+  const items: vscode.QuickPickItem[] = dependencies.all_dependents.map(path => ({
+    label: path.split('/').pop() || path,
+    description: path,
+    detail: dependencies.direct_dependents.includes(path) ? 'Direct dependent' : 'Transitive dependent'
+  }));
+
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: `${dependencies.total_count} files depend on ${dependencies.path}`,
+    matchOnDescription: true,
+  });
+
+  if (selected && selected.description) {
+    // Open the selected file
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const filePath = vscode.Uri.joinPath(workspaceFolders[0].uri, selected.description);
+      try {
+        await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(filePath));
+      } catch {
+        // File might not exist or be accessible
+        vscode.window.showWarningMessage(`Could not open file: ${selected.description}`);
+      }
+    }
+  }
+}
+
+/**
  * Register LSP client handlers
  */
 function registerClientHandlers(lspClient: LanguageClient) {
@@ -188,6 +265,10 @@ function registerClientHandlers(lspClient: LanguageClient) {
 
   lspClient.onNotification('unfault/fileCentrality', (params: FileCentralityNotification) => {
     setCentrality(params);
+  });
+
+  lspClient.onNotification('unfault/fileDependencies', (params: FileDependenciesNotification) => {
+    setDependencies(params);
   });
 }
 
@@ -255,8 +336,9 @@ export function activate(context: vscode.ExtensionContext) {
   // Update status bar when active editor changes
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(() => {
-      // Clear centrality when switching files (will be updated by server)
+      // Clear centrality and dependencies when switching files (will be updated by server)
       currentCentrality = null;
+      currentDependencies = null;
       updateStatusBar();
     })
   );
@@ -280,6 +362,10 @@ export function activate(context: vscode.ExtensionContext) {
       {
         label: '$(home) Welcome & Setup',
         description: 'Open the Unfault welcome panel'
+      },
+      {
+        label: '$(references) Show File Dependents',
+        description: 'Show files that depend on this file'
       },
       {
         label: '$(gear) Open Settings',
@@ -307,6 +393,9 @@ export function activate(context: vscode.ExtensionContext) {
       switch (selected.label) {
         case '$(home) Welcome & Setup':
           WelcomePanel.createOrShow(context.extensionUri);
+          break;
+        case '$(references) Show File Dependents':
+          vscode.commands.executeCommand('unfault.showDependents');
           break;
         case '$(gear) Open Settings':
           vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
@@ -336,6 +425,18 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
   });
   context.subscriptions.push(openSettingsCommand);
+
+  // Register command to show file dependents
+  const showDependentsCommand = vscode.commands.registerCommand('unfault.showDependents', async () => {
+    if (currentDependencies && currentDependencies.total_count > 0) {
+      showDependentsList(currentDependencies);
+    } else if (currentDependencies && currentDependencies.total_count === 0) {
+      vscode.window.showInformationMessage('No files depend on this file.');
+    } else {
+      vscode.window.showInformationMessage('Dependency information not available. Make sure the file has been analyzed.');
+    }
+  });
+  context.subscriptions.push(showDependentsCommand);
 
   // Register command to restart the LSP server
   const restartCommand = vscode.commands.registerCommand('unfault.restartServer', async () => {
