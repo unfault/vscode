@@ -195,16 +195,6 @@ function setDependencies(dependencies: FileDependenciesNotification | null) {
   
   // Show an information message when a file has dependents
   if (dependencies && dependencies.total_count > 0) {
-    const dependentsList = dependencies.direct_dependents.slice(0, 5);
-    let message = `📁 **${dependencies.total_count} file${dependencies.total_count > 1 ? 's' : ''} depend on this file**`;
-    
-    if (dependentsList.length > 0) {
-      message += '\n\nDirect dependents:\n';
-      message += dependentsList.map(d => `• ${d}`).join('\n');
-      if (dependencies.direct_dependents.length > 5) {
-        message += `\n... and ${dependencies.direct_dependents.length - 5} more`;
-      }
-    }
     
     // Show as information message with option to see all
     vscode.window.showInformationMessage(

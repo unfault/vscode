@@ -1,0 +1,17 @@
+.vscode/**
+.vscode-test/**
+.github/**
+.unfault/**
+src/**
+**/*.ts
+!out/**/*.js
+.gitignore
+.eslintrc.json
+tsconfig.json
+node_modules/**
+!node_modules/vscode-languageclient/**
+!node_modules/vscode-languageserver-protocol/**
+!node_modules/vscode-languageserver-types/**
+!node_modules/vscode-jsonrpc/**
+CODE_OF_CONDUCT.md
+**/*.map

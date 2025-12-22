@@ -135,7 +135,7 @@ export class WelcomePanel {
     return { isAuthenticated: false, source: null, userName: null };
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview): string {
+  private _getHtmlForWebview(_webview: vscode.Webview): string {
     const authStatus = this._getAuthStatus();
     const executablePath = vscode.workspace.getConfiguration('unfault').get('executablePath', 'unfault');
 

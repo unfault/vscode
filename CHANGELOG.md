@@ -5,6 +5,15 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-12-22
+
+### Added
+
+- **File Dependencies**: New command `Unfault: Show Files That Depend on This File` to discover reverse dependencies
+- **Dependency Notifications**: When a file has dependents, shows an information message with the count
+- **Quick Pick Browser**: Navigate to dependent files directly from the quick pick list, showing both direct and transitive dependents
+- Status bar menu now includes "Show File Dependents" option
+
 ## [0.8.0] - 2025-12-22
 
 ### Changed
