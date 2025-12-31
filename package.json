@@ -104,6 +104,16 @@
           ],
           "default": "off",
           "description": "Traces the communication between VS Code and the language server."
+        },
+        "unfault.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable code lenses that show function impact information above functions."
+        },
+        "unfault.codeLens.clickToOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "When clicking a code lens, open the detailed impact panel in a sidebar view."
         }
       }
     }

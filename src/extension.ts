@@ -1,15 +1,15 @@
 /**
  * Unfault VS Code Extension
  *
- * This extension provides production-readiness linting for your code by
- * integrating with the Unfault CLI via LSP. The CLI performs client-side
- * parsing and sends analyzed IR to the Unfault API, keeping your source
- * code local.
+ * This extension provides cognitive context for your code by integrating
+ * with the Unfault CLI via LSP. The CLI performs client-side parsing and
+ * sends analyzed IR to the Unfault API, keeping your source code local.
  *
  * Features:
- * - Real-time diagnostics via LSP
+ * - Function impact hovers (where is this used, what safeguards exist)
+ * - Real-time insights via LSP
+ * - File centrality awareness in the status bar
  * - Code actions for quick fixes
- * - Status bar showing Unfault status and diagnostics count
  * - Welcome panel for onboarding and authentication
  */
 
@@ -19,12 +19,38 @@ import {
   LanguageClientOptions,
   ServerOptions,
   State,
-  TransportKind
+  TransportKind,
+  RequestType
 } from 'vscode-languageclient/node';
 import { WelcomePanel } from './welcomePanel';
+import { ImpactPanel } from './impactPanel';
 
 let client: LanguageClient;
 let statusBarItem: vscode.StatusBarItem;
+
+interface FunctionImpactData {
+  name: string;
+  callers: Array<{
+    name: string;
+    file: string;
+    depth: number;
+  }>;
+  routes: Array<{
+    method: string;
+    path: string;
+  }>;
+  findings: Array<{
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+    learnMore?: string;
+  }>;
+}
+
+const GetFunctionImpactRequest = new RequestType<
+  { uri: string; functionName: string; position: { line: number; character: number } },
+  FunctionImpactData | null,
+  void
+>('unfault/getFunctionImpact');
 
 /**
  * File centrality notification from the LSP server
@@ -58,6 +84,201 @@ let currentDependencies: FileDependenciesNotification | null = null;
 
 // Track server state
 let serverState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
+
+class ImpactCodeLensProvider implements vscode.CodeLensProvider {
+  private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
+  public readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
+
+  async provideCodeLenses(
+    document: vscode.TextDocument,
+    _token: vscode.CancellationToken
+  ): Promise<vscode.CodeLens[]> {
+    console.log(`[Unfault] provideCodeLenses called for ${document.uri.toString()} (${document.languageId})`);
+    
+    if (!this.isCodeLensEnabled()) {
+      console.log('[Unfault] Code lens disabled in settings');
+      return [];
+    }
+
+    const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
+    if (!supportedLanguages.includes(document.languageId)) {
+      console.log(`[Unfault] Language ${document.languageId} not supported`);
+      return [];
+    }
+
+    const codeLenses: vscode.CodeLens[] = [];
+
+    try {
+      const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        'vscode.executeDocumentSymbolProvider',
+        document.uri
+      );
+
+      if (!symbols) {
+        console.log('[Unfault] No symbols found');
+        return [];
+      }
+
+      const functions = this.collectFunctionSymbols(symbols);
+      console.log(`[Unfault] Found ${functions.length} functions in ${document.uri.toString()}`);
+
+      for (const func of functions) {
+        const position = func.range.start;
+        codeLenses.push(new vscode.CodeLens(new vscode.Range(position, position)));
+      }
+    } catch (error) {
+      console.error('[Unfault] Error getting document symbols:', error);
+    }
+
+    return codeLenses;
+  }
+
+  private collectFunctionSymbols(symbols: vscode.DocumentSymbol[]): vscode.DocumentSymbol[] {
+    const result: vscode.DocumentSymbol[] = [];
+    for (const symbol of symbols) {
+      if (symbol.kind === vscode.SymbolKind.Function || symbol.kind === vscode.SymbolKind.Method) {
+        result.push(symbol);
+      }
+      if (symbol.children) {
+        result.push(...this.collectFunctionSymbols(symbol.children));
+      }
+    }
+    return result;
+  }
+
+  async resolveCodeLens(
+    codeLens: vscode.CodeLens,
+    _token: vscode.CancellationToken
+  ): Promise<vscode.CodeLens | null> {
+    console.log('[Unfault] resolveCodeLens called at', codeLens.range.start);
+    
+    if (!client || serverState !== 'running') {
+      console.log('[Unfault] Client not ready or server not running', { hasClient: !!client, serverState });
+      return codeLens;
+    }
+
+    const document = vscode.window.activeTextEditor?.document;
+    if (!document) {
+      console.log('[Unfault] No active editor document');
+      return codeLens;
+    }
+
+    try {
+      const functionName = await this.getFunctionNameAtPosition(document, codeLens.range.start);
+      if (!functionName) {
+        console.log('[Unfault] Could not find function name at position', codeLens.range.start);
+        return codeLens;
+      }
+
+      console.log(`[Unfault] Requesting impact data for function: ${functionName}`);
+      
+      const impactData = await client.sendRequest(
+        GetFunctionImpactRequest,
+        {
+          uri: document.uri.toString(),
+          functionName,
+          position: { line: codeLens.range.start.line, character: codeLens.range.start.character }
+        },
+        _token
+      );
+
+      console.log('[Unfault] Received impact data:', impactData);
+
+      if (impactData) {
+        const config = vscode.workspace.getConfiguration('unfault');
+        const clickToOpen = config.get<boolean>('codeLens.clickToOpen', true);
+
+        const parts: string[] = [];
+        
+        if (impactData.callers.length > 0) {
+          parts.push(`${impactData.callers.length} caller${impactData.callers.length > 1 ? 's' : ''}`);
+        }
+        
+        if (impactData.routes.length > 0) {
+          const routeSummary = impactData.routes.map(r => `${r.method} ${r.path}`).join(', ');
+          parts.push(`Routes: ${routeSummary}`);
+        }
+        
+        if (impactData.findings.length > 0) {
+          parts.push(`${impactData.findings.length} finding${impactData.findings.length > 1 ? 's' : ''}`);
+        }
+
+        codeLens.command = {
+          title: parts.length > 0 ? `📊 ${parts.join(' · ')}` : '📊 No impact',
+          command: clickToOpen ? 'unfault.showImpactPanel' : '',
+          arguments: [impactData]
+        };
+        console.log('[Unfault] Code lens resolved with title:', codeLens.command.title);
+      } else {
+        console.log('[Unfault] No impact data received');
+        codeLens.command = {
+          title: '📊 Analyzing...',
+          command: ''
+        };
+      }
+    } catch (error) {
+      console.error('[Unfault] Error resolving code lens:', error);
+      codeLens.command = {
+        title: '📊 Impact',
+        command: ''
+      };
+    }
+
+    return codeLens;
+  }
+
+  private isCodeLensEnabled(): boolean {
+    const config = vscode.workspace.getConfiguration('unfault');
+    return config.get<boolean>('codeLens.enabled', true);
+  }
+
+  private async getFunctionNameAtPosition(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): Promise<string | null> {
+    try {
+      const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+        'vscode.executeDocumentSymbolProvider',
+        document.uri
+      );
+
+      if (!symbols) {
+        return null;
+      }
+
+      const func = this.findFunctionAtPosition(symbols, position);
+      return func ? func.name : null;
+    } catch (error) {
+      console.error('[Unfault] Error finding function at position:', error);
+      return null;
+    }
+  }
+
+  private findFunctionAtPosition(
+    symbols: vscode.DocumentSymbol[],
+    pos: vscode.Position
+  ): vscode.DocumentSymbol | null {
+    for (const symbol of symbols) {
+      const range = symbol.range;
+      if (range.contains(pos)) {
+        if (symbol.kind === vscode.SymbolKind.Function || symbol.kind === vscode.SymbolKind.Method) {
+          return symbol;
+        }
+        if (symbol.children) {
+          const child = this.findFunctionAtPosition(symbol.children, pos);
+          if (child) {
+            return child;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  refresh() {
+    this._onDidChangeCodeLenses.fire();
+  }
+}
 
 /**
  * Get the path to the unfault binary from configuration.
@@ -115,7 +336,7 @@ function updateStatusBar() {
     // Show minimal status bar for unsupported files
     statusBarItem.text = '$(unfault-logo)';
     statusBarItem.backgroundColor = undefined;
-    statusBarItem.tooltip = 'Unfault - Production readiness linting\nOpen a supported file (Python, Go, Rust, TypeScript, JavaScript) to see diagnostics.';
+    statusBarItem.tooltip = 'Unfault - Cognitive context for your code\nOpen a supported file (Python, Go, Rust, TypeScript, JavaScript) to see insights.';
     statusBarItem.command = 'unfault.showMenu';
     statusBarItem.show();
     return;
@@ -125,35 +346,32 @@ function updateStatusBar() {
   const diagnostics = vscode.languages.getDiagnostics(editor!.document.uri)
     .filter(d => d.source === 'unfault');
   
-  const issueCount = diagnostics.length;
-  const errorCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
-  const warningCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
+  const insightCount = diagnostics.length;
+  const criticalCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
+  const noteCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
+  const infoCount = insightCount - criticalCount - noteCount;
 
-  // Build status text
+  // Build status text - use neutral colors, no red/yellow alarm
   let text = '$(unfault-logo)';
-  const tooltipParts: string[] = ['**Unfault Status**\n'];
+  const tooltipParts: string[] = ['**Unfault Insights**\n'];
 
-  if (issueCount === 0) {
+  if (insightCount === 0) {
     text = '$(unfault-logo) ✓';
     statusBarItem.backgroundColor = undefined;
-    tooltipParts.push('No issues found in this file');
+    tooltipParts.push('No insights for this file');
   } else {
-    text = `$(unfault-logo) ${issueCount}`;
-    statusBarItem.backgroundColor = errorCount > 0 
-      ? new vscode.ThemeColor('statusBarItem.errorBackground')
-      : warningCount > 0 
-        ? new vscode.ThemeColor('statusBarItem.warningBackground')
-        : undefined;
+    text = `$(unfault-logo) ${insightCount}`;
+    // Use neutral background - no alarming red/yellow colors
+    statusBarItem.backgroundColor = undefined;
     
-    if (errorCount > 0) {
-      tooltipParts.push(`- ${errorCount} error${errorCount > 1 ? 's' : ''}`);
+    if (criticalCount > 0) {
+      tooltipParts.push(`- ${criticalCount} important insight${criticalCount > 1 ? 's' : ''}`);
     }
-    if (warningCount > 0) {
-      tooltipParts.push(`- ${warningCount} warning${warningCount > 1 ? 's' : ''}`);
+    if (noteCount > 0) {
+      tooltipParts.push(`- ${noteCount} suggestion${noteCount > 1 ? 's' : ''}`);
     }
-    const infoCount = issueCount - errorCount - warningCount;
     if (infoCount > 0) {
-      tooltipParts.push(`- ${infoCount} info`);
+      tooltipParts.push(`- ${infoCount} context note${infoCount > 1 ? 's' : ''}`);
     }
   }
 
@@ -270,6 +488,20 @@ export function activate(context: vscode.ExtensionContext) {
   // Show initial status
   updateStatusBar();
 
+  // Register code lens provider
+  const codeLensProvider = new ImpactCodeLensProvider();
+  const codeLensRegistration = vscode.languages.registerCodeLensProvider(
+    [
+      { scheme: 'file', language: 'python' },
+      { scheme: 'file', language: 'go' },
+      { scheme: 'file', language: 'rust' },
+      { scheme: 'file', language: 'typescript' },
+      { scheme: 'file', language: 'javascript' },
+    ],
+    codeLensProvider
+  );
+  context.subscriptions.push(codeLensRegistration);
+
   // Get the command from configuration
   const command = getUnfaultPath();
   const args = ["lsp"];
@@ -333,6 +565,15 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Refresh code lenses when configuration changes
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('unfault.codeLens')) {
+        codeLensProvider.refresh();
+      }
+    })
+  );
+
   // Start the client. This will also launch the server
   client.start().catch((err) => {
     console.error('Failed to start Unfault LSP client:', err);
@@ -345,6 +586,14 @@ export function activate(context: vscode.ExtensionContext) {
     WelcomePanel.createOrShow(context.extensionUri);
   });
   context.subscriptions.push(showWelcomeCommand);
+
+  // Register command to show impact panel
+  const showImpactPanelCommand = vscode.commands.registerCommand('unfault.showImpactPanel', (impactData: FunctionImpactData) => {
+    if (impactData) {
+      ImpactPanel.createOrShow(context.extensionUri, impactData);
+    }
+  });
+  context.subscriptions.push(showImpactPanelCommand);
 
   // Register command to show menu
   const showMenuCommand = vscode.commands.registerCommand('unfault.showMenu', async () => {

@@ -1,9 +1,11 @@
 /**
  * Welcome Panel for Unfault VSCode Extension
- * 
+ *
  * Provides a user-friendly onboarding experience with:
+ * - Cognitive context engine introduction
  * - Authentication status display
  * - Easy setup for `unfault login` or API key configuration
+ * - Feature overview (hovers, file impact, diagnostics)
  * - Links to documentation
  */
 
@@ -135,9 +137,14 @@ export class WelcomePanel {
     return { isAuthenticated: false, source: null, userName: null };
   }
 
-  private _getHtmlForWebview(_webview: vscode.Webview): string {
+  private _getHtmlForWebview(webview: vscode.Webview): string {
     const authStatus = this._getAuthStatus();
     const executablePath = vscode.workspace.getConfiguration('unfault').get('executablePath', 'unfault');
+
+    // Get the logo URI for the webview
+    const logoUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'images', 'icon.png')
+    );
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -344,10 +351,10 @@ export class WelcomePanel {
 </head>
 <body>
     <h1>
-        <span class="logo">🛡️</span>
+        <img class="logo" src="${logoUri}" alt="Unfault Logo">
         Unfault
     </h1>
-    <p class="tagline">A calm reviewer for thoughtful engineers — Production-readiness linting for your code</p>
+    <p class="tagline">A cognitive context engine — Understand what your code means and does, while you're writing it</p>
 
     <div class="status-card">
         ${authStatus.isAuthenticated ? `
@@ -420,20 +427,28 @@ export class WelcomePanel {
         <h2>✨ Features</h2>
         <div class="features">
             <div class="feature">
-                <h3>🔍 Real-time Analysis</h3>
-                <p>Get diagnostics as you code with automatic analysis on file changes.</p>
+                <h3>🔗 Function Impact</h3>
+                <p>Code lenses above functions show impact summary at a glance. Click to open detailed panel with callers, routes, and findings.</p>
+            </div>
+            <div class="feature">
+                <h3>📊 File Centrality</h3>
+                <p>Status bar shows how central a file is — hub files that many others depend on are highlighted.</p>
+            </div>
+            <div class="feature">
+                <h3>🔔 Dependency Awareness</h3>
+                <p>Get notified when you open a file that other parts of your codebase depend on.</p>
+            </div>
+            <div class="feature">
+                <h3>💡 Inline Insights</h3>
+                <p>See contextual information about code behavior patterns as you write.</p>
             </div>
             <div class="feature">
                 <h3>🔧 Quick Fixes</h3>
-                <p>Apply suggested fixes with a single click via code actions.</p>
-            </div>
-            <div class="feature">
-                <h3>📊 Status Bar</h3>
-                <p>See issues at a glance in the status bar with severity indicators.</p>
+                <p>Apply suggested improvements with a single click via code actions.</p>
             </div>
             <div class="feature">
                 <h3>🔒 Privacy First</h3>
-                <p>Code is parsed locally — only analysis results are sent to the API.</p>
+                <p>Code is parsed locally — only semantic structure is sent to the API, never your source code.</p>
             </div>
         </div>
     </div>
