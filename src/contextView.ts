@@ -267,6 +267,9 @@ export class ContextView implements vscode.WebviewViewProvider {
     .signal.error { border-left-color: var(--vscode-errorForeground); }
     .signal.warning { border-left-color: var(--vscode-editorWarning-foreground); }
     .signal.info { border-left-color: var(--vscode-editorInfo-foreground); }
+
+    .story { margin: 8px 0; line-height: 1.5; }
+    .story strong { color: var(--vscode-foreground); }
   </style>
 </head>
 <body>
@@ -285,6 +288,51 @@ export class ContextView implements vscode.WebviewViewProvider {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;');
+    }
+
+    function buildSymbolStory(impact) {
+      // Build a human-readable narrative about what we know
+      const lines = [];
+
+      const routeCount = (impact.routes && impact.routes.length) || 0;
+      const callerCount = (impact.callers && impact.callers.length) || 0;
+      const findingCount = (impact.findings && impact.findings.length) || 0;
+
+      // Entry points / routes
+      if (routeCount > 0) {
+        const routeList = impact.routes.slice(0, 3).map(r => r.method + ' ' + r.path).join(', ');
+        if (routeCount === 1) {
+          lines.push('This is an entry point: <strong>' + esc(routeList) + '</strong>.');
+        } else if (routeCount <= 3) {
+          lines.push('Entry point for ' + routeCount + ' routes: <strong>' + esc(routeList) + '</strong>.');
+        } else {
+          lines.push('Entry point for ' + routeCount + ' routes including <strong>' + esc(routeList) + '</strong>.');
+        }
+      }
+
+      // Callers / usage
+      if (callerCount === 0 && routeCount === 0) {
+        lines.push("I haven't seen this called from anywhere yet.");
+      } else if (callerCount === 0 && routeCount > 0) {
+        lines.push("It's called directly from the route handler.");
+      } else if (callerCount === 1) {
+        lines.push('Called from <strong>' + esc(impact.callers[0].name) + '</strong>.');
+      } else if (callerCount <= 5) {
+        lines.push('Called from ' + callerCount + ' places in the codebase.');
+      } else {
+        lines.push('This is a popular function — called from ' + callerCount + ' places.');
+      }
+
+      // Signals / findings
+      if (findingCount === 0) {
+        lines.push('Nothing flagged here. Looks good to me.');
+      } else if (findingCount === 1) {
+        lines.push('One thing caught my attention below.');
+      } else {
+        lines.push(findingCount + ' things worth a look below.');
+      }
+
+      return '<div class="muted story">' + lines.join(' ') + '</div>';
     }
 
     function render(state) {
@@ -347,15 +395,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           '<p class="title">' + esc(active.name) + '</p>' +
           pinButton +
           '</div>' +
-          '<div class="muted">' +
-          (active.routes && active.routes.length
-            ? ('Reached by ' + active.routes.length + ' route' + (active.routes.length === 1 ? '' : 's'))
-            : 'No routes seen reaching this yet') +
-          ' · ' +
-          (active.callers && active.callers.length
-            ? ('Used by ' + active.callers.length + ' place' + (active.callers.length === 1 ? '' : 's'))
-            : 'No callers found') +
-          '</div>' +
+          buildSymbolStory(active) +
           renderCallers(active) +
           renderSignals(active)
         )
@@ -388,17 +428,14 @@ export class ContextView implements vscode.WebviewViewProvider {
       }).join('');
 
       return "<div class='section'>" +
-        "<h2>Callers</h2>" +
+        "<h2>Where it's called from</h2>" +
         "<ul class='list'>" + items + "</ul>" +
         "</div>";
     }
 
     function renderSignals(impact) {
       if (!impact.findings || impact.findings.length === 0) {
-        return "<div class='section'>" +
-          "<h2>Signals</h2>" +
-          "<div class='muted'>No signals for this symbol.</div>" +
-          "</div>";
+        return '';  // Story already says "looks good"
       }
 
       const items = impact.findings.slice(0, 6).map(f => {
@@ -418,37 +455,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       }).join('');
 
       return "<div class='section'>" +
-        "<h2>Signals</h2>" +
-        "<ul class='list'>" + items + "</ul>" +
-        "</div>";
-    }
-
-    function renderSignals(impact) {
-      if (!impact.findings || impact.findings.length === 0) {
-        return "<div class='section'>" +
-          "<h2>Signals</h2>" +
-          "<div class='muted'>No signals for this symbol.</div>" +
-          "</div>";
-      }
-
-      const items = impact.findings.slice(0, 6).map(f => {
-        const sev = f.severity || 'info';
-        const link = f.learnMore
-          ? ("<button class='button' onclick='openLink(" + JSON.stringify(f.learnMore) + ")'>Learn</button>")
-          : '';
-
-        return "<li>" +
-          "<div class='signal " + esc(sev) + "'>" +
-          "<div class='row'>" +
-          "<span>" + esc(f.message) + "</span>" +
-          link +
-          "</div>" +
-          "</div>" +
-          "</li>";
-      }).join('');
-
-      return "<div class='section'>" +
-        "<h2>Signals</h2>" +
+        "<h2>Worth a look</h2>" +
         "<ul class='list'>" + items + "</ul>" +
         "</div>";
     }

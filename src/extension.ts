@@ -467,11 +467,11 @@ function updateStatusBar() {
     tooltipParts.push(`- ${currentDependencies.total_count} files depend on this`);
   }
 
-  tooltipParts.push('\n---\nClick to open Unfault: Context');
+  tooltipParts.push('\n---\nClick for menu (Context, Output, Settings)');
 
   statusBarItem.text = text;
   statusBarItem.tooltip = new vscode.MarkdownString(tooltipParts.join('\n'));
-  statusBarItem.command = 'unfault.openContext';
+  statusBarItem.command = 'unfault.showMenu';
   statusBarItem.show();
 }
 
@@ -746,6 +746,10 @@ export function activate(context: vscode.ExtensionContext) {
   const showMenuCommand = vscode.commands.registerCommand('unfault.showMenu', async () => {
     const items: vscode.QuickPickItem[] = [
       {
+        label: '$(unfault-logo) Open Context',
+        description: 'Open Unfault: Context in the Explorer sidebar'
+      },
+      {
         label: '$(home) Welcome & Setup',
         description: 'Open the Unfault welcome panel'
       },
@@ -777,6 +781,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (selected) {
       switch (selected.label) {
+        case '$(unfault-logo) Open Context':
+          vscode.commands.executeCommand('unfault.openContext');
+          break;
         case '$(home) Welcome & Setup':
           WelcomePanel.createOrShow(context.extensionUri);
           break;
