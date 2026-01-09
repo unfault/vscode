@@ -143,10 +143,12 @@ export class ContextView implements vscode.WebviewViewProvider {
         case 'showDependents':
           vscode.commands.executeCommand('unfault.showDependents');
           break;
+        case 'ready':
+          // The webview script is loaded; send the current state now.
+          this.postState();
+          break;
       }
     });
-
-    this.postState();
   }
 
   private getState(): ContextViewState {
@@ -272,6 +274,9 @@ export class ContextView implements vscode.WebviewViewProvider {
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+
+    // Ask the extension for the latest state once the script is ready.
+    vscode.postMessage({ command: 'ready' });
 
     function esc(s) {
       return String(s)
