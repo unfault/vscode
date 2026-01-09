@@ -91,7 +91,8 @@
       "explorer": [
         {
           "id": "unfault.contextView",
-          "name": "Unfault: Context"
+          "name": "Unfault: Context",
+          "type": "webview"
         }
       ]
     },

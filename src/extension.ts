@@ -732,7 +732,8 @@ export function activate(context: vscode.ExtensionContext) {
     'unfault.openContext',
     async (impactData?: FunctionImpactData) => {
       // Reveal the view (Explorer sidebar)
-      await vscode.commands.executeCommand('workbench.action.openView', 'unfault.contextView');
+      await vscode.commands.executeCommand('workbench.view.explorer');
+      await vscode.commands.executeCommand('unfault.contextView.focus');
 
       if (impactData) {
         contextView?.setPinnedImpact(impactData);
