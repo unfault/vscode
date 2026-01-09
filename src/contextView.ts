@@ -305,13 +305,15 @@ export class ContextView implements vscode.WebviewViewProvider {
       const callerCount = (impact.callers && impact.callers.length) || 0;
       const findingCount = (impact.findings && impact.findings.length) || 0;
 
-      // Collect SLO info from routes
+      // Collect SLO info from routes, tracking which routes have SLOs
       const allSlos = [];
+      const routesWithSlos = [];
       if (impact.routes) {
         for (const route of impact.routes) {
           if (route.slos && route.slos.length > 0) {
+            routesWithSlos.push(route);
             for (const slo of route.slos) {
-              allSlos.push(slo);
+              allSlos.push({ ...slo, route: route.method + ' ' + route.path });
             }
           }
         }
@@ -319,30 +321,67 @@ export class ContextView implements vscode.WebviewViewProvider {
       const sloCount = allSlos.length;
       const lowBudgetSlos = allSlos.filter(s => s.error_budget_remaining !== undefined && s.error_budget_remaining < 20);
 
+      // Detect if this is an inherited SLO situation (nested function, not a direct route handler)
+      // A function is "nested" if it has callers but also reaches routes (i.e., it's in the call path)
+      const isNestedFunction = callerCount > 0 && routeCount > 0;
+
       // Entry points / routes
       if (routeCount > 0) {
         const routeList = impact.routes.slice(0, 3).map(r => r.method + ' ' + r.path).join(', ');
-        if (routeCount === 1) {
-          lines.push('This is an entry point: <strong>' + esc(routeList) + '</strong>.');
-        } else if (routeCount <= 3) {
-          lines.push('Entry point for ' + routeCount + ' routes: <strong>' + esc(routeList) + '</strong>.');
+        if (isNestedFunction) {
+          // This function is called by something that eventually reaches a route
+          if (routeCount === 1) {
+            lines.push('Reachable from <strong>' + esc(routeList) + '</strong>.');
+          } else if (routeCount <= 3) {
+            lines.push('Reachable from ' + routeCount + ' routes: <strong>' + esc(routeList) + '</strong>.');
+          } else {
+            lines.push('Reachable from ' + routeCount + ' routes including <strong>' + esc(routeList) + '</strong>.');
+          }
         } else {
-          lines.push('Entry point for ' + routeCount + ' routes including <strong>' + esc(routeList) + '</strong>.');
+          // Direct route handler
+          if (routeCount === 1) {
+            lines.push('This is an entry point: <strong>' + esc(routeList) + '</strong>.');
+          } else if (routeCount <= 3) {
+            lines.push('Entry point for ' + routeCount + ' routes: <strong>' + esc(routeList) + '</strong>.');
+          } else {
+            lines.push('Entry point for ' + routeCount + ' routes including <strong>' + esc(routeList) + '</strong>.');
+          }
         }
       }
 
-      // SLO monitoring status
+      // SLO monitoring status — different copy for nested vs direct
       if (sloCount > 0) {
-        if (lowBudgetSlos.length > 0) {
-          const sloNames = lowBudgetSlos.slice(0, 2).map(s => s.name).join(', ');
-          lines.push('<strong style="color: var(--vscode-editorWarning-foreground);">Heads up:</strong> ' +
-            lowBudgetSlos.length + ' SLO' + (lowBudgetSlos.length > 1 ? 's' : '') +
-            ' monitoring this have low error budget (' + esc(sloNames) + ').');
+        if (isNestedFunction) {
+          // Inherited SLO impact — the key feature!
+          const routeNames = routesWithSlos.slice(0, 2).map(r => r.method + ' ' + r.path).join(', ');
+          if (lowBudgetSlos.length > 0) {
+            lines.push('<strong style="color: var(--vscode-editorWarning-foreground);">Heads up:</strong> ' +
+              'Changes here could affect ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') +
+              ' via ' + esc(routeNames) + ' — and ' + lowBudgetSlos.length +
+              ' ' + (lowBudgetSlos.length > 1 ? 'are' : 'is') + ' running low on error budget.');
+          } else {
+            lines.push('Changes here could affect ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') +
+              ' via <strong>' + esc(routeNames) + '</strong>' +
+              (routesWithSlos.length > 2 ? ' and ' + (routesWithSlos.length - 2) + ' more' : '') +
+              ' — all healthy for now.');
+          }
         } else {
-          lines.push('Monitored by ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') + ' — all looking healthy.');
+          // Direct route handler with SLOs
+          if (lowBudgetSlos.length > 0) {
+            const sloNames = lowBudgetSlos.slice(0, 2).map(s => s.name).join(', ');
+            lines.push('<strong style="color: var(--vscode-editorWarning-foreground);">Heads up:</strong> ' +
+              lowBudgetSlos.length + ' SLO' + (lowBudgetSlos.length > 1 ? 's' : '') +
+              ' monitoring this have low error budget (' + esc(sloNames) + ').');
+          } else {
+            lines.push('Monitored by ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') + ' — all looking healthy.');
+          }
         }
       } else if (routeCount > 0) {
-        lines.push('No SLOs are monitoring these routes yet.');
+        if (isNestedFunction) {
+          lines.push('No SLOs are watching the routes this reaches.');
+        } else {
+          lines.push('No SLOs are monitoring these routes yet.');
+        }
       }
 
       // Callers / usage
