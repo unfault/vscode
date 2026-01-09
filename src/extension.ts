@@ -39,6 +39,13 @@ interface FunctionImpactData {
   routes: Array<{
     method: string;
     path: string;
+    slos?: Array<{
+      name: string;
+      provider: string;
+      target_percent?: number;
+      error_budget_remaining?: number;
+      dashboard_url?: string;
+    }>;
   }>;
   findings: Array<{
     severity: 'error' | 'warning' | 'info';

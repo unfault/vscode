@@ -10,6 +10,13 @@ export interface FunctionImpactData {
   routes: Array<{
     method: string;
     path: string;
+    slos?: Array<{
+      name: string;
+      provider: string;
+      target_percent?: number;
+      error_budget_remaining?: number;
+      dashboard_url?: string;
+    }>;
   }>;
   findings: Array<{
     severity: 'error' | 'warning' | 'info';
@@ -298,6 +305,20 @@ export class ContextView implements vscode.WebviewViewProvider {
       const callerCount = (impact.callers && impact.callers.length) || 0;
       const findingCount = (impact.findings && impact.findings.length) || 0;
 
+      // Collect SLO info from routes
+      const allSlos = [];
+      if (impact.routes) {
+        for (const route of impact.routes) {
+          if (route.slos && route.slos.length > 0) {
+            for (const slo of route.slos) {
+              allSlos.push(slo);
+            }
+          }
+        }
+      }
+      const sloCount = allSlos.length;
+      const lowBudgetSlos = allSlos.filter(s => s.error_budget_remaining !== undefined && s.error_budget_remaining < 20);
+
       // Entry points / routes
       if (routeCount > 0) {
         const routeList = impact.routes.slice(0, 3).map(r => r.method + ' ' + r.path).join(', ');
@@ -308,6 +329,20 @@ export class ContextView implements vscode.WebviewViewProvider {
         } else {
           lines.push('Entry point for ' + routeCount + ' routes including <strong>' + esc(routeList) + '</strong>.');
         }
+      }
+
+      // SLO monitoring status
+      if (sloCount > 0) {
+        if (lowBudgetSlos.length > 0) {
+          const sloNames = lowBudgetSlos.slice(0, 2).map(s => s.name).join(', ');
+          lines.push('<strong style="color: var(--vscode-editorWarning-foreground);">Heads up:</strong> ' +
+            lowBudgetSlos.length + ' SLO' + (lowBudgetSlos.length > 1 ? 's' : '') +
+            ' monitoring this have low error budget (' + esc(sloNames) + ').');
+        } else {
+          lines.push('Monitored by ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') + ' — all looking healthy.');
+        }
+      } else if (routeCount > 0) {
+        lines.push('No SLOs are monitoring these routes yet.');
       }
 
       // Callers / usage
@@ -333,6 +368,64 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
 
       return '<div class="muted story">' + lines.join(' ') + '</div>';
+    }
+
+    function renderSlos(impact) {
+      // Collect SLOs from all routes
+      const allSlos = [];
+      if (impact.routes) {
+        for (const route of impact.routes) {
+          if (route.slos && route.slos.length > 0) {
+            for (const slo of route.slos) {
+              allSlos.push({ ...slo, route: route.method + ' ' + route.path });
+            }
+          }
+        }
+      }
+
+      if (allSlos.length === 0) return '';
+
+      const items = allSlos.slice(0, 5).map(slo => {
+        const budget = slo.error_budget_remaining;
+        const isLow = budget !== undefined && budget < 20;
+        const budgetClass = isLow ? 'warning' : 'info';
+
+        // Build a friendly status line
+        let statusLine = '';
+        if (budget !== undefined) {
+          if (isLow) {
+            statusLine = budget.toFixed(1) + '% error budget remaining — getting tight';
+          } else if (budget > 80) {
+            statusLine = 'Healthy — ' + budget.toFixed(0) + '% error budget available';
+          } else {
+            statusLine = budget.toFixed(0) + '% error budget remaining';
+          }
+        } else if (slo.target_percent !== undefined) {
+          statusLine = 'Targeting ' + slo.target_percent + '% availability';
+        }
+
+        const link = slo.dashboard_url
+          ? ("<button class='button' onclick='openLink(" + JSON.stringify(slo.dashboard_url) + ")'>Dashboard</button>")
+          : '';
+
+        return "<li>" +
+          "<div class='signal " + budgetClass + "'>" +
+          "<div class='row'>" +
+          "<span><strong>" + esc(slo.name) + "</strong></span>" +
+          link +
+          "</div>" +
+          "<div class='muted'>" +
+          esc(slo.provider) + " · watches " + esc(slo.route) +
+          (statusLine ? '<br>' + statusLine : '') +
+          "</div>" +
+          "</div>" +
+          "</li>";
+      }).join('');
+
+      return "<div class='section'>" +
+        "<h2>What's watching this</h2>" +
+        "<ul class='list'>" + items + "</ul>" +
+        "</div>";
     }
 
     function render(state) {
@@ -396,6 +489,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           pinButton +
           '</div>' +
           buildSymbolStory(active) +
+          renderSlos(active) +
           renderCallers(active) +
           renderSignals(active)
         )
