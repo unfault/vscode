@@ -80,8 +80,21 @@
         "command": "unfault.showDependents",
         "title": "Show Files That Depend on This File",
         "category": "Unfault"
+      },
+      {
+        "command": "unfault.openContext",
+        "title": "Open Context Sidebar",
+        "category": "Unfault"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "unfault.contextView",
+          "name": "Unfault: Context"
+        }
+      ]
+    },
     "configuration": {
       "title": "Unfault",
       "properties": {
@@ -113,7 +126,23 @@
         "unfault.codeLens.clickToOpen": {
           "type": "boolean",
           "default": true,
-          "description": "When clicking a code lens, open the detailed impact panel in a sidebar view."
+          "description": "When clicking a code lens, open the Unfault context sidebar."
+        },
+        "unfault.diagnostics.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show Unfault insights as editor squiggles (diagnostics). Disabled by default for a calmer experience."
+        },
+        "unfault.diagnostics.minSeverity": {
+          "type": "string",
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
+          "default": "high",
+          "description": "Minimum severity to show as diagnostics when diagnostics are enabled."
         }
       }
     }

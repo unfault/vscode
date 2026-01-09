@@ -20,13 +20,14 @@ import {
   ServerOptions,
   State,
   TransportKind,
-  RequestType
+  ExecuteCommandRequest
 } from 'vscode-languageclient/node';
 import { WelcomePanel } from './welcomePanel';
-import { ImpactPanel } from './impactPanel';
+import { ContextView } from './contextView';
 
 let client: LanguageClient;
 let statusBarItem: vscode.StatusBarItem;
+let contextView: ContextView | null = null;
 
 interface FunctionImpactData {
   name: string;
@@ -46,11 +47,22 @@ interface FunctionImpactData {
   }>;
 }
 
-const GetFunctionImpactRequest = new RequestType<
-  { uri: string; functionName: string; position: { line: number; character: number } },
-  FunctionImpactData | null,
-  void
->('unfault/getFunctionImpact');
+async function getFunctionImpact(
+  lspClient: LanguageClient,
+  params: { uri: string; functionName: string; position: { line: number; character: number } },
+  token?: vscode.CancellationToken
+): Promise<FunctionImpactData | null> {
+  const result = await lspClient.sendRequest(
+    ExecuteCommandRequest.type,
+    {
+      command: 'unfault/getFunctionImpact',
+      arguments: [params]
+    },
+    token
+  );
+
+  return (result as FunctionImpactData | null) ?? null;
+}
 
 /**
  * File centrality notification from the LSP server
@@ -172,15 +184,15 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
 
       console.log(`[Unfault] Requesting impact data for function: ${functionName}`);
       
-      const impactData = await client.sendRequest(
-        GetFunctionImpactRequest,
-        {
-          uri: document.uri.toString(),
-          functionName,
-          position: { line: codeLens.range.start.line, character: codeLens.range.start.character }
-        },
-        _token
-      );
+       const impactData = await getFunctionImpact(
+         client,
+         {
+           uri: document.uri.toString(),
+           functionName,
+           position: { line: codeLens.range.start.line, character: codeLens.range.start.character }
+         },
+         _token
+       );
 
       console.log('[Unfault] Received impact data:', impactData);
 
@@ -188,40 +200,40 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
         const config = vscode.workspace.getConfiguration('unfault');
         const clickToOpen = config.get<boolean>('codeLens.clickToOpen', true);
 
-        const parts: string[] = [];
-        
-        if (impactData.callers.length > 0) {
-          parts.push(`${impactData.callers.length} caller${impactData.callers.length > 1 ? 's' : ''}`);
-        }
-        
-        if (impactData.routes.length > 0) {
-          const routeSummary = impactData.routes.map(r => `${r.method} ${r.path}`).join(', ');
-          parts.push(`Routes: ${routeSummary}`);
-        }
-        
-        if (impactData.findings.length > 0) {
-          parts.push(`${impactData.findings.length} finding${impactData.findings.length > 1 ? 's' : ''}`);
-        }
+         const parts: string[] = [];
 
-        codeLens.command = {
-          title: parts.length > 0 ? `📊 ${parts.join(' · ')}` : '📊 No impact',
-          command: clickToOpen ? 'unfault.showImpactPanel' : '',
-          arguments: [impactData]
-        };
+         if (impactData.callers.length > 0) {
+           parts.push(`used by ${impactData.callers.length} place${impactData.callers.length > 1 ? 's' : ''}`);
+         }
+
+         if (impactData.routes.length > 0) {
+           const routeSummary = impactData.routes.map(r => `${r.method} ${r.path}`).join(', ');
+           parts.push(`reached by ${routeSummary}`);
+         }
+
+         if (impactData.findings.length > 0) {
+           parts.push('worth a look');
+         }
+
+         codeLens.command = {
+           title: parts.length > 0 ? `Unfault: ${parts.join(' · ')}` : 'Unfault: context',
+           command: clickToOpen ? 'unfault.openContext' : '',
+           arguments: [impactData]
+         };
         console.log('[Unfault] Code lens resolved with title:', codeLens.command.title);
       } else {
         console.log('[Unfault] No impact data received');
-        codeLens.command = {
-          title: '📊 Analyzing...',
-          command: ''
-        };
+         codeLens.command = {
+           title: 'Unfault: analyzing…',
+           command: ''
+         };
       }
     } catch (error) {
       console.error('[Unfault] Error resolving code lens:', error);
-      codeLens.command = {
-        title: '📊 Impact',
-        command: ''
-      };
+       codeLens.command = {
+         title: 'Unfault: context',
+         command: ''
+       };
     }
 
     return codeLens;
@@ -280,12 +292,83 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
   }
 }
 
+async function getFunctionNameAtPosition(
+  document: vscode.TextDocument,
+  position: vscode.Position
+): Promise<string | null> {
+  try {
+    const symbols = await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+      'vscode.executeDocumentSymbolProvider',
+      document.uri
+    );
+
+    if (!symbols) {
+      return null;
+    }
+
+    const findFunctionAtPosition = (
+      nodes: vscode.DocumentSymbol[],
+      pos: vscode.Position
+    ): vscode.DocumentSymbol | null => {
+      for (const symbol of nodes) {
+        if (symbol.range.contains(pos)) {
+          if (
+            symbol.kind === vscode.SymbolKind.Function ||
+            symbol.kind === vscode.SymbolKind.Method
+          ) {
+            return symbol;
+          }
+          if (symbol.children) {
+            const child = findFunctionAtPosition(symbol.children, pos);
+            if (child) {
+              return child;
+            }
+          }
+        }
+      }
+      return null;
+    };
+
+    const func = findFunctionAtPosition(symbols, position);
+    return func ? func.name : null;
+  } catch (error) {
+    console.error('[Unfault] Error finding function at position:', error);
+    return null;
+  }
+}
+
 /**
  * Get the path to the unfault binary from configuration.
  */
 function getUnfaultPath(): string {
   const config = vscode.workspace.getConfiguration('unfault');
   return config.get('executablePath', 'unfault');
+}
+
+function getLspSettingsPayload() {
+  const config = vscode.workspace.getConfiguration('unfault');
+  return {
+    unfault: {
+      diagnostics: {
+        enabled: config.get<boolean>('diagnostics.enabled', false),
+        minSeverity: config.get<string>('diagnostics.minSeverity', 'high')
+      }
+    }
+  };
+}
+
+async function pushLspSettings() {
+  if (!client) {
+    return;
+  }
+
+  try {
+    await client.sendNotification('workspace/didChangeConfiguration', {
+      settings: getLspSettingsPayload()
+    });
+  } catch (error) {
+    console.error('[Unfault] Failed to push LSP settings:', error);
+  }
 }
 
 /**
@@ -342,37 +425,27 @@ function updateStatusBar() {
     return;
   }
 
-  // Get diagnostics for the current file
-  const diagnostics = vscode.languages.getDiagnostics(editor!.document.uri)
-    .filter(d => d.source === 'unfault');
-  
-  const insightCount = diagnostics.length;
-  const criticalCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Error).length;
-  const noteCount = diagnostics.filter(d => d.severity === vscode.DiagnosticSeverity.Warning).length;
-  const infoCount = insightCount - criticalCount - noteCount;
+  const config = vscode.workspace.getConfiguration('unfault');
+  const diagnosticsEnabled = config.get<boolean>('diagnostics.enabled', false);
+  const minSeverity = config.get<string>('diagnostics.minSeverity', 'high');
 
-  // Build status text - use neutral colors, no red/yellow alarm
   let text = '$(unfault-logo)';
-  const tooltipParts: string[] = ['**Unfault Insights**\n'];
+  const tooltipParts: string[] = ['**Unfault: Context**'];
 
-  if (insightCount === 0) {
-    text = '$(unfault-logo) ✓';
-    statusBarItem.backgroundColor = undefined;
-    tooltipParts.push('No insights for this file');
+  statusBarItem.backgroundColor = undefined;
+
+  if (diagnosticsEnabled) {
+    const diagnostics = vscode.languages
+      .getDiagnostics(editor!.document.uri)
+      .filter(d => d.source === 'unfault');
+
+    tooltipParts.push(`Squiggles: on (min severity: ${minSeverity})`);
+
+    if (diagnostics.length > 0) {
+      text += ` ${diagnostics.length}`;
+    }
   } else {
-    text = `$(unfault-logo) ${insightCount}`;
-    // Use neutral background - no alarming red/yellow colors
-    statusBarItem.backgroundColor = undefined;
-    
-    if (criticalCount > 0) {
-      tooltipParts.push(`- ${criticalCount} important insight${criticalCount > 1 ? 's' : ''}`);
-    }
-    if (noteCount > 0) {
-      tooltipParts.push(`- ${noteCount} suggestion${noteCount > 1 ? 's' : ''}`);
-    }
-    if (infoCount > 0) {
-      tooltipParts.push(`- ${infoCount} context note${infoCount > 1 ? 's' : ''}`);
-    }
+    tooltipParts.push('Squiggles: off (calm mode)');
   }
 
   // Add centrality info if available
@@ -380,7 +453,7 @@ function updateStatusBar() {
     tooltipParts.push('\n**File Importance**');
     tooltipParts.push(`- Imported by: ${currentCentrality.in_degree} files`);
     tooltipParts.push(`- Imports: ${currentCentrality.out_degree} files`);
-    
+
     // Add centrality indicator to text
     if (currentCentrality.in_degree > 10) {
       text += ' $(hub)';
@@ -389,11 +462,16 @@ function updateStatusBar() {
     }
   }
 
-  tooltipParts.push('\n---\nClick for options');
+  if (currentDependencies && currentDependencies.total_count > 0) {
+    tooltipParts.push('\n**Dependents**');
+    tooltipParts.push(`- ${currentDependencies.total_count} files depend on this`);
+  }
+
+  tooltipParts.push('\n---\nClick to open Unfault: Context');
 
   statusBarItem.text = text;
   statusBarItem.tooltip = new vscode.MarkdownString(tooltipParts.join('\n'));
-  statusBarItem.command = 'unfault.showMenu';
+  statusBarItem.command = 'unfault.openContext';
   statusBarItem.show();
 }
 
@@ -402,6 +480,7 @@ function updateStatusBar() {
  */
 function setCentrality(centrality: FileCentralityNotification | null) {
   currentCentrality = centrality;
+  contextView?.setCentrality(centrality);
   updateStatusBar();
 }
 
@@ -410,20 +489,7 @@ function setCentrality(centrality: FileCentralityNotification | null) {
  */
 function setDependencies(dependencies: FileDependenciesNotification | null) {
   currentDependencies = dependencies;
-  
-  // Show an information message when a file has dependents
-  if (dependencies && dependencies.total_count > 0) {
-    
-    // Show as information message with option to see all
-    vscode.window.showInformationMessage(
-      dependencies.summary,
-      'Show All Dependents'
-    ).then(selection => {
-      if (selection === 'Show All Dependents') {
-        showDependentsList(dependencies);
-      }
-    });
-  }
+  contextView?.setDependencies(dependencies);
 }
 
 /**
@@ -464,9 +530,12 @@ function registerClientHandlers(lspClient: LanguageClient) {
   lspClient.onDidChangeState((e) => {
     if (e.newState === State.Running) {
       serverState = 'running';
+      contextView?.setServerState(serverState);
       updateStatusBar();
+      pushLspSettings();
     } else if (e.newState === State.Stopped) {
       serverState = 'stopped';
+      contextView?.setServerState(serverState);
       updateStatusBar();
     }
   });
@@ -484,6 +553,15 @@ export function activate(context: vscode.ExtensionContext) {
   // Create status bar item
   statusBarItem = createStatusBarItem();
   context.subscriptions.push(statusBarItem);
+
+  // Register the Explorer sidebar context view
+  contextView = new ContextView(context.extensionUri);
+  contextView.setServerState(serverState);
+  contextView.setActiveEditor(vscode.window.activeTextEditor ?? null);
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('unfault.contextView', contextView)
+  );
 
   // Show initial status
   updateStatusBar();
@@ -526,6 +604,7 @@ export function activate(context: vscode.ExtensionContext) {
       { scheme: 'file', language: 'typescript' },
       { scheme: 'file', language: 'javascript' },
     ],
+    initializationOptions: getLspSettingsPayload(),
     synchronize: {
       // Notify the server about file changes to configuration files
       fileEvents: [
@@ -557,11 +636,67 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Update status bar when active editor changes
   context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(() => {
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
       // Clear centrality and dependencies when switching files (will be updated by server)
       currentCentrality = null;
       currentDependencies = null;
+      contextView?.setActiveEditor(editor ?? null);
       updateStatusBar();
+    })
+  );
+
+  // Follow cursor and update the context sidebar
+  let followCursorTimer: NodeJS.Timeout | null = null;
+  let lastFollowedKey: string | null = null;
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection((e) => {
+      if (!contextView || !client || serverState !== 'running') {
+        return;
+      }
+
+      const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
+      if (!supportedLanguages.includes(e.textEditor.document.languageId)) {
+        return;
+      }
+
+      if (followCursorTimer) {
+        clearTimeout(followCursorTimer);
+      }
+
+      followCursorTimer = setTimeout(async () => {
+        try {
+          if (contextView?.isPinned()) {
+            return;
+          }
+
+          const doc = e.textEditor.document;
+          const position = e.selections[0]?.active ?? new vscode.Position(0, 0);
+          const functionName = await getFunctionNameAtPosition(doc, position);
+
+          if (!functionName) {
+            contextView?.setActiveImpact(null);
+            lastFollowedKey = null;
+            return;
+          }
+
+          const key = `${doc.uri.toString()}::${functionName}`;
+          if (key === lastFollowedKey) {
+            return;
+          }
+          lastFollowedKey = key;
+
+          const impactData = await getFunctionImpact(client, {
+            uri: doc.uri.toString(),
+            functionName,
+            position: { line: position.line, character: position.character }
+          });
+
+          contextView?.setActiveImpact(impactData);
+        } catch (error) {
+          console.error('[Unfault] Failed to update context view from cursor:', error);
+        }
+      }, 300);
     })
   );
 
@@ -571,6 +706,11 @@ export function activate(context: vscode.ExtensionContext) {
       if (e.affectsConfiguration('unfault.codeLens')) {
         codeLensProvider.refresh();
       }
+
+      if (e.affectsConfiguration('unfault.diagnostics')) {
+        pushLspSettings();
+        updateStatusBar();
+      }
     })
   );
 
@@ -578,6 +718,7 @@ export function activate(context: vscode.ExtensionContext) {
   client.start().catch((err) => {
     console.error('Failed to start Unfault LSP client:', err);
     serverState = 'error';
+    contextView?.setServerState(serverState);
     updateStatusBar();
   });
 
@@ -587,13 +728,18 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(showWelcomeCommand);
 
-  // Register command to show impact panel
-  const showImpactPanelCommand = vscode.commands.registerCommand('unfault.showImpactPanel', (impactData: FunctionImpactData) => {
-    if (impactData) {
-      ImpactPanel.createOrShow(context.extensionUri, impactData);
+  const openContextCommand = vscode.commands.registerCommand(
+    'unfault.openContext',
+    async (impactData?: FunctionImpactData) => {
+      // Reveal the view (Explorer sidebar)
+      await vscode.commands.executeCommand('workbench.action.openView', 'unfault.contextView');
+
+      if (impactData) {
+        contextView?.setPinnedImpact(impactData);
+      }
     }
-  });
-  context.subscriptions.push(showImpactPanelCommand);
+  );
+  context.subscriptions.push(openContextCommand);
 
   // Register command to show menu
   const showMenuCommand = vscode.commands.registerCommand('unfault.showMenu', async () => {
@@ -680,6 +826,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Register command to restart the LSP server
   const restartCommand = vscode.commands.registerCommand('unfault.restartServer', async () => {
     serverState = 'starting';
+    contextView?.setServerState(serverState);
     updateStatusBar();
 
     if (client) {
@@ -710,6 +857,7 @@ export function activate(context: vscode.ExtensionContext) {
     client.start().catch((err) => {
       console.error('Failed to restart Unfault LSP client:', err);
       serverState = 'error';
+      contextView?.setServerState(serverState);
       updateStatusBar();
     });
 
