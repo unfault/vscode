@@ -378,9 +378,9 @@ export class ContextView implements vscode.WebviewViewProvider {
         }
       } else if (routeCount > 0) {
         if (isNestedFunction) {
-          lines.push('No SLOs are watching the routes this reaches.');
+          lines.push("I'm not aware of any SLOs watching the routes this reaches.");
         } else {
-          lines.push('No SLOs are monitoring these routes yet.');
+          lines.push("I'm not aware of any SLOs for this route yet.");
         }
       }
 
