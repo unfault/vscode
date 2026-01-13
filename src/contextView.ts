@@ -360,6 +360,33 @@ export class ContextView implements vscode.WebviewViewProvider {
       font-family: var(--vscode-editor-font-family);
     }
 
+    /* Importers list */
+    .importers-list {
+      margin-top: 6px;
+      border-top: 1px solid var(--vscode-widget-border);
+      padding-top: 6px;
+    }
+    .importer-item {
+      padding: 2px 6px;
+      cursor: pointer;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    .importer-item:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+    .importer-item.muted {
+      cursor: default;
+      color: var(--vscode-descriptionForeground);
+    }
+    .importer-item.muted:hover {
+      background: transparent;
+    }
+    .importer-name {
+      font-family: var(--vscode-editor-font-family);
+      color: var(--vscode-foreground);
+    }
+
     /* Callers list */
     .callers-list {
       margin-top: 4px;
@@ -683,20 +710,40 @@ export class ContextView implements vscode.WebviewViewProvider {
       
       const fileLabel = buildFileLabel(state.centrality);
       const fileMeta = state.centrality
-        ? ('Imported by ' + state.centrality.in_degree + ' · Imports ' + state.centrality.out_degree)
+        ? ('Imports ' + state.centrality.out_degree)
         : '';
 
-      const dependentsBlock = (state.dependencies && state.dependencies.total_count > 0)
-        ? '<div class="divider"></div>' +
-          '<div class="deps-row">' +
-          '<div>' +
-          '<div class="deps-count"><strong>' + state.dependencies.total_count + '</strong> ' + 
-            (state.dependencies.total_count === 1 ? 'file depends' : 'files depend') + ' on this</div>' +
-          '<div class="deps-direct">Direct: ' + state.dependencies.direct_dependents.length + '</div>' +
-          '</div>' +
-          '<button class="button" data-action="showDependents">Show</button>' +
-          '</div>'
-        : '';
+      // Build importers section (files that import this file)
+      function buildImportersBlock() {
+        if (!state.dependencies || state.dependencies.total_count === 0) return '';
+        
+        const importers = state.dependencies.direct_dependents || [];
+        const totalCount = state.dependencies.total_count;
+        
+        let html = '<div class="divider"></div>';
+        html += '<div class="deps-row">';
+        html += '<div class="deps-count">Imported by <strong>' + totalCount + '</strong> ' + 
+          (totalCount === 1 ? 'file' : 'files') + '</div>';
+        html += '<button class="button" data-action="toggleImporters">Show</button>';
+        html += '</div>';
+        
+        // Collapsible importer list (hidden by default)
+        html += '<div id="importers-list" class="importers-list" style="display: none;">';
+        for (const file of importers) {
+          const fileName = file.split('/').pop() || file;
+          html += '<div class="importer-item" data-action="openFile" data-file="' + esc(file) + '">';
+          html += '<span class="importer-name">' + esc(fileName) + '</span>';
+          html += '</div>';
+        }
+        if (totalCount > importers.length) {
+          html += '<div class="importer-item muted">+' + (totalCount - importers.length) + ' more (transitive)</div>';
+        }
+        html += '</div>';
+        
+        return html;
+      }
+
+      const importersBlock = buildImportersBlock();
 
       const fileCardContent = state.centrality
         ? '<div class="card-header">' +
@@ -704,7 +751,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           (fileLabel ? '<span class="card-subtitle">' + esc(fileName) + '</span>' : '') +
           '</div>' +
           '<div class="card-meta">' + fileMeta + '</div>' +
-          dependentsBlock
+          importersBlock
         : '<div class="muted">Open a supported file to see context.</div>';
 
       const fileCard = '<div class="section">' +
@@ -939,6 +986,14 @@ export class ContextView implements vscode.WebviewViewProvider {
           break;
         case 'showDependents':
           vscode.postMessage({ command: 'showDependents' });
+          break;
+        case 'toggleImporters':
+          const list = document.getElementById('importers-list');
+          if (list) {
+            const isHidden = list.style.display === 'none';
+            list.style.display = isHidden ? 'block' : 'none';
+            target.textContent = isHidden ? 'Hide' : 'Show';
+          }
           break;
       }
     });
