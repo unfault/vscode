@@ -703,23 +703,23 @@ export function activate(context: vscode.ExtensionContext) {
   let followCursorTimer: NodeJS.Timeout | null = null;
   let lastFollowedKey: string | null = null;
 
-  // Invalidate function impact cache when document changes (e.g., quick fix applied)
-  let documentChangeTimer: NodeJS.Timeout | null = null;
+  // Refresh function impact after document is saved (analysis runs on save)
+  let documentSaveTimer: NodeJS.Timeout | null = null;
   context.subscriptions.push(
-    vscode.workspace.onDidChangeTextDocument((e) => {
+    vscode.workspace.onDidSaveTextDocument((doc) => {
       // Clear lastFollowedKey to force re-fetch of function impact
-      // This ensures "Worth a Look" updates after fixes are applied
-      if (lastFollowedKey && lastFollowedKey.startsWith(e.document.uri.toString())) {
+      // This ensures "Worth a Look" updates after fixes are applied and saved
+      if (lastFollowedKey && lastFollowedKey.startsWith(doc.uri.toString())) {
         lastFollowedKey = null;
         
         // Debounced refresh: wait for LSP analysis to complete, then re-fetch impact
-        if (documentChangeTimer) {
-          clearTimeout(documentChangeTimer);
+        if (documentSaveTimer) {
+          clearTimeout(documentSaveTimer);
         }
-        documentChangeTimer = setTimeout(async () => {
+        documentSaveTimer = setTimeout(async () => {
           const editor = vscode.window.activeTextEditor;
           if (!editor || !contextView || !client || serverState !== 'running') return;
-          if (editor.document.uri.toString() !== e.document.uri.toString()) return;
+          if (editor.document.uri.toString() !== doc.uri.toString()) return;
           
           const position = editor.selection.active;
           const functionName = await getFunctionNameAtPosition(editor.document, position);
@@ -732,7 +732,7 @@ export function activate(context: vscode.ExtensionContext) {
             contextView.setActiveImpact(impactData);
             lastFollowedKey = `${editor.document.uri.toString()}::${functionName}`;
           }
-        }, 1500); // Wait 1.5s for LSP analysis to complete
+        }, 1000); // Wait 1s for LSP analysis to complete
       }
     })
   );
