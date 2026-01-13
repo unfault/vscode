@@ -658,12 +658,21 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorSelection((e) => {
+      console.log('[Unfault] Selection changed', { 
+        hasContextView: !!contextView, 
+        hasClient: !!client, 
+        serverState,
+        languageId: e.textEditor.document.languageId
+      });
+
       if (!contextView || !client || serverState !== 'running') {
+        console.log('[Unfault] Skipping - not ready');
         return;
       }
 
       const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
       if (!supportedLanguages.includes(e.textEditor.document.languageId)) {
+        console.log('[Unfault] Skipping - unsupported language');
         return;
       }
 
@@ -674,12 +683,16 @@ export function activate(context: vscode.ExtensionContext) {
       followCursorTimer = setTimeout(async () => {
         try {
           if (contextView?.isPinned()) {
+            console.log('[Unfault] Skipping - pinned');
             return;
           }
 
           const doc = e.textEditor.document;
           const position = e.selections[0]?.active ?? new vscode.Position(0, 0);
+          console.log('[Unfault] Getting function at position', { line: position.line, char: position.character });
+          
           const functionName = await getFunctionNameAtPosition(doc, position);
+          console.log('[Unfault] Function name:', functionName);
 
           if (!functionName) {
             contextView?.setActiveImpact(null);
@@ -689,15 +702,18 @@ export function activate(context: vscode.ExtensionContext) {
 
           const key = `${doc.uri.toString()}::${functionName}`;
           if (key === lastFollowedKey) {
+            console.log('[Unfault] Skipping - same function');
             return;
           }
           lastFollowedKey = key;
 
+          console.log('[Unfault] Fetching impact for:', functionName);
           const impactData = await getFunctionImpact(client, {
             uri: doc.uri.toString(),
             functionName,
             position: { line: position.line, character: position.character }
           });
+          console.log('[Unfault] Got impact data:', impactData);
 
           contextView?.setActiveImpact(impactData);
         } catch (error) {

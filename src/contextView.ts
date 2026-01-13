@@ -198,26 +198,61 @@ export class ContextView implements vscode.WebviewViewProvider {
       font-family: var(--vscode-font-family);
       color: var(--vscode-foreground);
       background: var(--vscode-sideBar-background);
-      padding: 10px 10px 16px;
+      padding: 8px;
       margin: 0;
+      font-size: 12px;
     }
 
     .muted { color: var(--vscode-descriptionForeground); }
 
-    .section { margin: 12px 0; }
-    .section h2 {
-      font-size: 11px;
-      letter-spacing: 0.4px;
+    .section { margin-bottom: 8px; }
+    .section-label {
+      font-size: 9px;
+      letter-spacing: 0.5px;
       text-transform: uppercase;
       margin: 0 0 6px;
       color: var(--vscode-descriptionForeground);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .section-hint {
+      font-size: 8px;
+      text-transform: lowercase;
+      letter-spacing: normal;
+      opacity: 0.7;
     }
 
     .card {
       background: var(--vscode-editor-inactiveSelectionBackground);
       border: 1px solid var(--vscode-widget-border);
-      border-radius: 6px;
-      padding: 8px;
+      border-radius: 4px;
+      padding: 8px 10px;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 2px;
+    }
+
+    .card-title {
+      font-weight: 500;
+      margin: 0;
+      font-size: 12px;
+      color: var(--vscode-foreground);
+    }
+
+    .card-subtitle {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    .card-meta {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
     }
 
     .row {
@@ -227,56 +262,131 @@ export class ContextView implements vscode.WebviewViewProvider {
       align-items: baseline;
     }
 
-    .title {
-      font-weight: 600;
-      margin: 0;
-      font-size: 13px;
-    }
-
     .button {
       color: var(--vscode-textLink-foreground);
       cursor: pointer;
       border: none;
       background: transparent;
       padding: 0;
-      font: inherit;
+      font-size: 10px;
+      font-family: inherit;
+    }
+    .button:hover { text-decoration: underline; }
+
+    .divider { 
+      height: 1px; 
+      background: var(--vscode-widget-border); 
+      margin: 8px 0; 
     }
 
-    .list { margin: 6px 0 0; padding: 0; list-style: none; }
-    .list li { margin: 6px 0; }
+    .deps-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-    .item {
+    .deps-count {
+      font-size: 11px;
+      color: var(--vscode-foreground);
+    }
+    .deps-count strong {
+      font-weight: 600;
+    }
+
+    .deps-direct {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    /* Symbol card */
+    .symbol-name {
+      font-weight: 500;
+      font-family: var(--vscode-editor-font-family);
+      color: #dcdcaa;
+      font-size: 12px;
+    }
+
+    .story { 
+      margin: 6px 0; 
+      line-height: 1.5; 
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+    }
+    .story strong { color: var(--vscode-foreground); }
+
+    /* Callers list */
+    .callers-list {
+      margin-top: 4px;
+    }
+
+    .caller-item {
       display: block;
-      padding: 6px;
-      border-radius: 6px;
+      padding: 4px 6px;
+      border-radius: 4px;
       cursor: pointer;
+      margin-bottom: 2px;
     }
-    .item:hover {
+    .caller-item:hover {
       background: var(--vscode-list-hoverBackground);
     }
 
-    .badge {
-      font-size: 11px;
-      color: var(--vscode-descriptionForeground);
-      font-family: var(--vscode-editor-font-family);
-      white-space: nowrap;
+    .caller-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
     }
 
-    .divider { height: 1px; background: var(--vscode-widget-border); margin: 10px 0; }
+    .caller-name {
+      font-size: 11px;
+      color: var(--vscode-foreground);
+    }
+
+    .caller-depth {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    .caller-file {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    /* Signals/Findings */
+    .signals-list {
+      margin-top: 4px;
+    }
 
     .signal {
-      padding: 6px;
-      border-radius: 6px;
-      background: var(--vscode-editor-inactiveSelectionBackground);
+      padding: 4px 6px;
+      border-radius: 0 4px 4px 0;
       border-left: 3px solid var(--vscode-widget-border);
+      font-size: 11px;
+      margin-bottom: 4px;
     }
 
     .signal.error { border-left-color: var(--vscode-errorForeground); }
-    .signal.warning { border-left-color: var(--vscode-editorWarning-foreground); }
+    .signal.warning { border-left-color: #cca700; }
     .signal.info { border-left-color: var(--vscode-editorInfo-foreground); }
 
-    .story { margin: 8px 0; line-height: 1.5; }
-    .story strong { color: var(--vscode-foreground); }
+    .signal-content {
+      color: var(--vscode-foreground);
+    }
+
+    /* Pinned banner */
+    .pinned-banner {
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      border: 1px solid var(--vscode-widget-border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      margin-bottom: 8px;
+    }
+
+    .status-line {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
@@ -298,115 +408,36 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     function buildSymbolStory(impact) {
-      // Build a human-readable narrative about what we know
-      const lines = [];
+      // Build a concise narrative like the landing page: 
+      // "Reachable from POST /checkout. Called from 3 places."
+      const parts = [];
 
       const routeCount = (impact.routes && impact.routes.length) || 0;
       const callerCount = (impact.callers && impact.callers.length) || 0;
-      const findingCount = (impact.findings && impact.findings.length) || 0;
 
-      // Collect SLO info from routes, tracking which routes have SLOs
-      const allSlos = [];
-      const routesWithSlos = [];
-      if (impact.routes) {
-        for (const route of impact.routes) {
-          if (route.slos && route.slos.length > 0) {
-            routesWithSlos.push(route);
-            for (const slo of route.slos) {
-              allSlos.push({ ...slo, route: route.method + ' ' + route.path });
-            }
-          }
-        }
-      }
-      const sloCount = allSlos.length;
-      const lowBudgetSlos = allSlos.filter(s => s.error_budget_remaining !== undefined && s.error_budget_remaining < 20);
-
-      // Detect if this is an inherited SLO situation (nested function, not a direct route handler)
-      // A function is "nested" if it has callers but also reaches routes (i.e., it's in the call path)
-      const isNestedFunction = callerCount > 0 && routeCount > 0;
-
-      // Entry points / routes
+      // Route info
       if (routeCount > 0) {
-        const routeList = impact.routes.slice(0, 3).map(r => r.method + ' ' + r.path).join(', ');
-        if (isNestedFunction) {
-          // This function is called by something that eventually reaches a route
-          if (routeCount === 1) {
-            lines.push('Reachable from <strong>' + esc(routeList) + '</strong>.');
-          } else if (routeCount <= 3) {
-            lines.push('Reachable from ' + routeCount + ' routes: <strong>' + esc(routeList) + '</strong>.');
-          } else {
-            lines.push('Reachable from ' + routeCount + ' routes including <strong>' + esc(routeList) + '</strong>.');
-          }
+        const firstRoute = impact.routes[0];
+        const routeStr = firstRoute.method + ' ' + firstRoute.path;
+        if (routeCount === 1) {
+          parts.push('Reachable from <strong>' + esc(routeStr) + '</strong>.');
         } else {
-          // Direct route handler
-          if (routeCount === 1) {
-            lines.push('This is an entry point: <strong>' + esc(routeList) + '</strong>.');
-          } else if (routeCount <= 3) {
-            lines.push('Entry point for ' + routeCount + ' routes: <strong>' + esc(routeList) + '</strong>.');
-          } else {
-            lines.push('Entry point for ' + routeCount + ' routes including <strong>' + esc(routeList) + '</strong>.');
-          }
+          parts.push('Reachable from <strong>' + esc(routeStr) + '</strong> + ' + (routeCount - 1) + ' more.');
         }
       }
 
-      // SLO monitoring status — different copy for nested vs direct
-      if (sloCount > 0) {
-        if (isNestedFunction) {
-          // Inherited SLO impact — the key feature!
-          const routeNames = routesWithSlos.slice(0, 2).map(r => r.method + ' ' + r.path).join(', ');
-          if (lowBudgetSlos.length > 0) {
-            lines.push('<strong style="color: var(--vscode-editorWarning-foreground);">Heads up:</strong> ' +
-              'Changes here could affect ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') +
-              ' via ' + esc(routeNames) + ' — and ' + lowBudgetSlos.length +
-              ' ' + (lowBudgetSlos.length > 1 ? 'are' : 'is') + ' running low on error budget.');
-          } else {
-            lines.push('Changes here could affect ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') +
-              ' via <strong>' + esc(routeNames) + '</strong>' +
-              (routesWithSlos.length > 2 ? ' and ' + (routesWithSlos.length - 2) + ' more' : '') +
-              ' — all healthy for now.');
-          }
-        } else {
-          // Direct route handler with SLOs
-          if (lowBudgetSlos.length > 0) {
-            const sloNames = lowBudgetSlos.slice(0, 2).map(s => s.name).join(', ');
-            lines.push('<strong style="color: var(--vscode-editorWarning-foreground);">Heads up:</strong> ' +
-              lowBudgetSlos.length + ' SLO' + (lowBudgetSlos.length > 1 ? 's' : '') +
-              ' monitoring this have low error budget (' + esc(sloNames) + ').');
-          } else {
-            lines.push('Monitored by ' + sloCount + ' SLO' + (sloCount > 1 ? 's' : '') + ' — all looking healthy.');
-          }
-        }
-      } else if (routeCount > 0) {
-        if (isNestedFunction) {
-          lines.push("I'm not aware of any SLOs watching the routes this reaches.");
-        } else {
-          lines.push("I'm not aware of any SLOs for this route yet.");
-        }
+      // Caller count
+      if (callerCount === 1) {
+        parts.push('Called from <strong>1 place</strong>.');
+      } else if (callerCount > 1) {
+        parts.push('Called from <strong>' + callerCount + ' places</strong>.');
       }
 
-      // Callers / usage
-      if (callerCount === 0 && routeCount === 0) {
-        lines.push("I haven't seen this called from anywhere yet.");
-      } else if (callerCount === 0 && routeCount > 0) {
-        lines.push("It's called directly from the route handler.");
-      } else if (callerCount === 1) {
-        lines.push('Called from <strong>' + esc(impact.callers[0].name) + '</strong>.');
-      } else if (callerCount <= 5) {
-        lines.push('Called from ' + callerCount + ' places in the codebase.');
-      } else {
-        lines.push('This is a popular function — called from ' + callerCount + ' places.');
+      if (parts.length === 0) {
+        return '<p class="story">No call paths found yet.</p>';
       }
 
-      // Signals / findings
-      if (findingCount === 0) {
-        lines.push('Nothing flagged here. Looks good to me.');
-      } else if (findingCount === 1) {
-        lines.push('One thing caught my attention below.');
-      } else {
-        lines.push(findingCount + ' things worth a look below.');
-      }
-
-      return '<div class="muted story">' + lines.join(' ') + '</div>';
+      return '<p class="story">' + parts.join(' ') + '</p>';
     }
 
     function renderSlos(impact) {
@@ -448,12 +479,12 @@ export class ContextView implements vscode.WebviewViewProvider {
           : '';
 
         return "<li>" +
-          "<div class='signal " + budgetClass + "'>" +
+          "<div class='slo-item " + budgetClass + "'>" +
           "<div class='row'>" +
-          "<span><strong>" + esc(slo.name) + "</strong></span>" +
+          "<span style='font-size: 11px;'><strong>" + esc(slo.name) + "</strong></span>" +
           link +
           "</div>" +
-          "<div class='muted'>" +
+          "<div class='muted' style='font-size: 10px;'>" +
           esc(slo.provider) + " · watches " + esc(slo.route) +
           (statusLine ? '<br>' + statusLine : '') +
           "</div>" +
@@ -461,8 +492,8 @@ export class ContextView implements vscode.WebviewViewProvider {
           "</li>";
       }).join('');
 
-      return "<div class='section'>" +
-        "<h2>What's watching this</h2>" +
+      return "<div style='margin-top: 10px;'>" +
+        "<div class='section-label'>What's watching this</div>" +
         "<ul class='list'>" + items + "</ul>" +
         "</div>";
     }
@@ -471,129 +502,181 @@ export class ContextView implements vscode.WebviewViewProvider {
       const root = document.getElementById('root');
       if (!root) return;
 
-      const serverLine = state.serverState === 'running'
-        ? '<span class="muted">Context ready</span>'
-        : '<span class="muted">Server: ' + esc(state.serverState) + '</span>';
+      // Only show status if not running (error states)
+      const serverLine = state.serverState !== 'running'
+        ? '<div class="status-line">Server: ' + esc(state.serverState) + '</div>'
+        : '';
 
       const pinned = state.pinnedImpact;
       const active = pinned || state.activeImpact;
 
       const pinnedBanner = pinned
-        ? '<div class="section">' +
-          '<div class="card">' +
+        ? '<div class="pinned-banner">' +
           '<div class="row">' +
-          '<p class="title">Pinned</p>' +
+          '<span class="card-title">Pinned</span>' +
           '<button class="button" onclick="unpin()">Unpin</button>' +
-          '</div>' +
-          '<div class="muted">Showing pinned symbol context</div>' +
           '</div>' +
           '</div>'
         : '';
 
+      // === FILE CARD ===
+      const fileName = state.centrality ? state.centrality.path.split('/').pop() : '';
+      
+      // Build user-friendly file label
+      // - "Important file" for high centrality/many importers
+      // - Otherwise just show the filename without confusing graph terms
+      function buildFileLabel(centrality) {
+        if (!centrality) return '';
+        
+        // Check if it's an important/central file (high in_degree or importance)
+        const isImportant = centrality.importance_score > 0.5 || centrality.in_degree >= 5;
+        if (isImportant) {
+          return 'Important file';
+        }
+        
+        // For regular files, don't show confusing labels like "Leaf file"
+        // Just return empty and we'll show just the filename
+        return '';
+      }
+      
+      const fileLabel = buildFileLabel(state.centrality);
+      const fileMeta = state.centrality
+        ? ('Imported by ' + state.centrality.in_degree + ' · Imports ' + state.centrality.out_degree)
+        : '';
+
       const dependentsBlock = (state.dependencies && state.dependencies.total_count > 0)
         ? '<div class="divider"></div>' +
-          '<div class="row">' +
+          '<div class="deps-row">' +
           '<div>' +
-          '<div><strong>' + state.dependencies.total_count + '</strong> files depend on this</div>' +
-          '<div class="muted">Direct: ' + state.dependencies.direct_dependents.length + '</div>' +
+          '<div class="deps-count"><strong>' + state.dependencies.total_count + '</strong> ' + 
+            (state.dependencies.total_count === 1 ? 'file depends' : 'files depend') + ' on this</div>' +
+          '<div class="deps-direct">Direct: ' + state.dependencies.direct_dependents.length + '</div>' +
           '</div>' +
           '<button class="button" onclick="showDependents()">Show</button>' +
           '</div>'
         : '';
 
-      const fileLabel = (state.centrality && state.centrality.label) ? state.centrality.label : '—';
-      const filePath = state.centrality ? esc(state.centrality.path) : '';
-      const fileMeta = state.centrality
-        ? ('Imported by ' + state.centrality.in_degree + ' · Imports ' + state.centrality.out_degree)
-        : 'Open a supported file to see context.';
+      const fileCardContent = state.centrality
+        ? '<div class="card-header">' +
+          '<span class="card-title">' + (fileLabel ? esc(fileLabel) : esc(fileName)) + '</span>' +
+          (fileLabel ? '<span class="card-subtitle">' + esc(fileName) + '</span>' : '') +
+          '</div>' +
+          '<div class="card-meta">' + fileMeta + '</div>' +
+          dependentsBlock
+        : '<div class="muted">Open a supported file to see context.</div>';
 
       const fileCard = '<div class="section">' +
-        '<h2>File</h2>' +
+        '<div class="section-label">FILE</div>' +
         '<div class="card">' +
-        '<div class="row">' +
-        '<p class="title">' + esc(fileLabel) + '</p>' +
-        '<span class="badge">' + filePath + '</span>' +
-        '</div>' +
-        '<div class="muted">' + esc(fileMeta) + '</div>' +
-        dependentsBlock +
+        fileCardContent +
         '</div>' +
         '</div>';
 
+      // === FUNCTION CARD ===
+      // Extract just the function name (remove file: prefix if present)
+      function getFunctionName(fullName) {
+        if (!fullName) return '';
+        const parts = fullName.split(':');
+        return parts.length > 1 ? parts[parts.length - 1] : fullName;
+      }
+      
+      const funcName = active ? getFunctionName(active.name) : '';
       const pinButton = !pinned ? '<button class="button" onclick="pinCurrent()">Pin</button>' : '';
 
       const symbolBody = active
         ? (
-          '<div class="row">' +
-          '<p class="title">' + esc(active.name) + '</p>' +
+          '<div class="card-header">' +
+          '<span class="symbol-name">' + esc(funcName) + '</span>' +
           pinButton +
           '</div>' +
           buildSymbolStory(active) +
-          renderSlos(active) +
           renderCallers(active) +
-          renderSignals(active)
+          renderSignals(active) +
+          renderPathInsights(active)
         )
         : '<div class="muted">Move your cursor inside a function to see its context.</div>';
 
       const symbolCard = '<div class="section">' +
-        '<h2>Symbol</h2>' +
+        '<div class="section-label">FUNCTION</div>' +
         '<div class="card">' +
         symbolBody +
         '</div>' +
         '</div>';
 
-      root.innerHTML = '<div class="section">' + serverLine + '</div>' + pinnedBanner + fileCard + symbolCard;
+      root.innerHTML = serverLine + pinnedBanner + fileCard + symbolCard;
     }
 
     function renderCallers(impact) {
       if (!impact.callers || impact.callers.length === 0) return '';
 
-      const top = impact.callers.slice(0, 8);
-      const items = top.map(c => {
-        return "<li>" +
-          "<span class='item' onclick='openFile(" + JSON.stringify(c.file) + ")'>" +
-          "<div class='row'>" +
-          "<span>" + esc(c.name) + "</span>" +
-          "<span class='badge'>d" + esc(c.depth) + "</span>" +
+      // Deduplicate callers by name+file, keeping the one with lowest depth
+      const seen = new Map();
+      for (const c of impact.callers) {
+        const key = c.name + '::' + c.file;
+        if (!seen.has(key) || seen.get(key).depth > c.depth) {
+          seen.set(key, c);
+        }
+      }
+      const unique = Array.from(seen.values()).slice(0, 8);
+
+      const items = unique.map(c => {
+        return "<div class='caller-item' onclick='openFile(" + JSON.stringify(c.file) + ")'>" +
+          "<div class='caller-header'>" +
+          "<span class='caller-name'>" + esc(c.name) + "</span>" +
+          "<span class='caller-depth'>" + esc(c.depth) + "</span>" +
           "</div>" +
-          "<div class='muted'>" + esc(c.file) + "</div>" +
-          "</span>" +
-          "</li>";
+          "<div class='caller-file'>" + esc(c.file) + "</div>" +
+          "</div>";
       }).join('');
 
-      return "<div class='section'>" +
-        "<h2>Where it's called from</h2>" +
-        "<ul class='list'>" + items + "</ul>" +
+      return "<div style='margin-top: 8px;'>" +
+        "<div class='section-label'>CALLED FROM <span class='section-hint'>hops</span></div>" +
+        "<div class='callers-list'>" + items + "</div>" +
         "</div>";
     }
 
     function renderSignals(impact) {
-      if (!impact.findings || impact.findings.length === 0) {
-        return '';  // Story already says "looks good"
+      // Use pre-summarized insights from the CLI (preferred)
+      // Fall back to raw findings if insights not available
+      const insights = impact.insights || [];
+      
+      if (insights.length === 0) {
+        return '';
       }
 
-      const items = impact.findings.slice(0, 6).map(f => {
-        const sev = f.severity || 'info';
-        const link = f.learnMore
-          ? ("<button class='button' onclick='openLink(" + JSON.stringify(f.learnMore) + ")'>Learn</button>")
-          : '';
-
-        return "<li>" +
-          "<div class='signal " + esc(sev) + "'>" +
-          "<div class='row'>" +
-          "<span>" + esc(f.message) + "</span>" +
-          link +
-          "</div>" +
-          "</div>" +
-          "</li>";
+      const items = insights.map(i => {
+        const sev = i.severity || 'info';
+        return "<div class='signal " + esc(sev) + "'>" +
+          "<span class='signal-content'>" + esc(i.message) + "</span>" +
+          "</div>";
       }).join('');
 
-      return "<div class='section'>" +
-        "<h2>Worth a look</h2>" +
-        "<ul class='list'>" + items + "</ul>" +
+      return "<div style='margin-top: 8px;'>" +
+        "<div class='section-label'>WORTH A LOOK</div>" +
+        "<div class='signals-list'>" + items + "</div>" +
         "</div>";
     }
 
+    function renderPathInsights(impact) {
+      // Path insights are findings from callers in the call path
+      const pathInsights = impact.pathInsights || [];
+      
+      if (pathInsights.length === 0) {
+        return '';
+      }
 
+      const items = pathInsights.map(i => {
+        const sev = i.severity || 'info';
+        return "<div class='signal " + esc(sev) + "'>" +
+          "<span class='signal-content'>" + esc(i.message) + "</span>" +
+          "</div>";
+      }).join('');
+
+      return "<div style='margin-top: 8px;'>" +
+        "<div class='section-label'>ON THIS PATH</div>" +
+        "<div class='signals-list'>" + items + "</div>" +
+        "</div>";
+    }
 
     function openFile(filePath) {
       vscode.postMessage({ command: 'openFile', filePath });
