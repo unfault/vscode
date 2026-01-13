@@ -360,6 +360,54 @@ export class ContextView implements vscode.WebviewViewProvider {
       color: var(--vscode-descriptionForeground);
     }
 
+    /* Call Tree */
+    .call-tree {
+      margin-top: 4px;
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    .route-header {
+      padding: 4px 6px;
+      margin-bottom: 4px;
+      background: var(--vscode-textBlockQuote-background);
+      border-radius: 4px;
+    }
+
+    .route-method {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--vscode-charts-green);
+    }
+
+    .route-path {
+      font-size: 11px;
+      color: var(--vscode-foreground);
+    }
+
+    .caller-tree-item {
+      padding: 2px 6px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+    .caller-tree-item:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+
+    .caller-tree-item.target {
+      color: var(--vscode-textLink-foreground);
+      cursor: default;
+    }
+
+    .caller-tree-item.target:hover {
+      background: transparent;
+    }
+
+    .tree-indent {
+      color: var(--vscode-descriptionForeground);
+      font-size: 11px;
+    }
+
     /* Signals/Findings */
     .signals-list {
       margin-top: 4px;
@@ -617,29 +665,75 @@ export class ContextView implements vscode.WebviewViewProvider {
     function renderCallers(impact) {
       if (!impact.callers || impact.callers.length === 0) return '';
 
-      // Deduplicate callers by name+file, keeping the one with lowest depth
-      const seen = new Map();
+      // Build a tree from the 'calls' field
+      // Each caller has: name, file, depth, calls (the function it calls)
+      const callersByName = new Map();
       for (const c of impact.callers) {
-        const key = c.name + '::' + c.file;
-        if (!seen.has(key) || seen.get(key).depth > c.depth) {
-          seen.set(key, c);
-        }
+        callersByName.set(c.name, c);
       }
-      const unique = Array.from(seen.values()).slice(0, 8);
 
-      const items = unique.map(c => {
-        return "<div class='caller-item' onclick='openFile(" + JSON.stringify(c.file) + ")'>" +
-          "<div class='caller-header'>" +
-          "<span class='caller-name'>" + esc(c.name) + "</span>" +
-          "<span class='caller-depth'>" + esc(c.depth) + "</span>" +
-          "</div>" +
-          "<div class='caller-file'>" + esc(c.file) + "</div>" +
+      // Find root callers (highest depth = furthest from target)
+      // Sort by depth descending to get the entry points first
+      const sortedCallers = [...impact.callers].sort((a, b) => b.depth - a.depth);
+      
+      // Build the call chain: start from highest depth, follow 'calls' to target
+      function buildChain(callerName, visited = new Set()) {
+        if (visited.has(callerName)) return [];
+        visited.add(callerName);
+        
+        const caller = callersByName.get(callerName);
+        if (!caller) return [];
+        
+        const chain = [caller];
+        if (caller.calls && callersByName.has(caller.calls)) {
+          chain.push(...buildChain(caller.calls, visited));
+        }
+        return chain;
+      }
+
+      // Get the root (entry point with highest depth)
+      const root = sortedCallers[0];
+      if (!root) return '';
+
+      const chain = buildChain(root.name);
+      const targetName = impact.name || 'target';
+
+      // Render as a tree
+      let treeHtml = '';
+      chain.forEach((c, idx) => {
+        const indent = '&nbsp;&nbsp;'.repeat(idx);
+        const connector = idx === 0 ? '' : '└─ ';
+        const isRoute = impact.routes && impact.routes.some(r => 
+          c.name && (c.name.includes(r.path) || r.path)
+        );
+        
+        treeHtml += "<div class='caller-tree-item' onclick='openFile(" + JSON.stringify(c.file) + ")'>" +
+          "<span class='tree-indent'>" + indent + connector + "</span>" +
+          "<span class='caller-name'>" + esc(c.name) + "()</span>" +
           "</div>";
-      }).join('');
+      });
+
+      // Add the target function at the bottom
+      const targetIndent = '&nbsp;&nbsp;'.repeat(chain.length);
+      const targetConnector = chain.length > 0 ? '└─ ' : '';
+      treeHtml += "<div class='caller-tree-item target'>" +
+        "<span class='tree-indent'>" + targetIndent + targetConnector + "</span>" +
+        "<span class='caller-name'>" + esc(targetName) + "() ← you are here</span>" +
+        "</div>";
+
+      // Show route info at the top if available
+      let routeHeader = '';
+      if (impact.routes && impact.routes.length > 0) {
+        const route = impact.routes[0];
+        routeHeader = "<div class='route-header'>" +
+          "<span class='route-method'>" + esc(route.method) + "</span> " +
+          "<span class='route-path'>" + esc(route.path) + "</span>" +
+          "</div>";
+      }
 
       return "<div style='margin-top: 8px;'>" +
-        "<div class='section-label'>CALLED FROM <span class='section-hint'>hops</span></div>" +
-        "<div class='callers-list'>" + items + "</div>" +
+        "<div class='section-label'>CALL PATH</div>" +
+        "<div class='call-tree'>" + routeHeader + treeHtml + "</div>" +
         "</div>";
     }
 
