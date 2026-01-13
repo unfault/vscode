@@ -706,18 +706,23 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     function renderCallers(impact) {
-      if (!impact.callers || impact.callers.length === 0) return '';
+      const hasCallers = impact.callers && impact.callers.length > 0;
+      const hasRoutes = impact.routes && impact.routes.length > 0;
+      
+      // If no callers and no routes, nothing to show
+      if (!hasCallers && !hasRoutes) return '';
 
       // Build a tree from the 'calls' field
       // Each caller has: name, file, depth, calls (the function it calls)
+      const callers = impact.callers || [];
       const callersByName = new Map();
-      for (const c of impact.callers) {
+      for (const c of callers) {
         callersByName.set(c.name, c);
       }
 
       // Find root callers (highest depth = furthest from target)
       // Sort by depth descending to get the entry points first
-      const sortedCallers = [...impact.callers].sort((a, b) => b.depth - a.depth);
+      const sortedCallers = [...callers].sort((a, b) => b.depth - a.depth);
       
       // Build the call chain: start from highest depth, follow 'calls' to target
       function buildChain(callerName, visited = new Set()) {
@@ -736,9 +741,9 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       // Get the root (entry point with highest depth)
       const rootCaller = sortedCallers[0];
-      if (!rootCaller) return '';
-
-      const chain = buildChain(rootCaller.name);
+      
+      // Build chain from root caller, or empty if no callers
+      const chain = rootCaller ? buildChain(rootCaller.name) : [];
       
       // Extract target function name (remove file: prefix if present)
       const targetFullName = impact.name || 'target';
