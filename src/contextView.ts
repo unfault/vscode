@@ -574,7 +574,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         }
 
         const link = slo.dashboard_url
-          ? ("<button class='button' onclick='openLink(" + JSON.stringify(slo.dashboard_url) + ")'>Dashboard</button>")
+          ? ("<button class='button' data-action='openLink' data-url='" + esc(slo.dashboard_url) + "'>Dashboard</button>")
           : '';
 
         return "<li>" +
@@ -613,7 +613,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         ? '<div class="pinned-banner">' +
           '<div class="row">' +
           '<span class="card-title">Pinned</span>' +
-          '<button class="button" onclick="unpin()">Unpin</button>' +
+          '<button class="button" data-action="unpin">Unpin</button>' +
           '</div>' +
           '</div>'
         : '';
@@ -651,7 +651,7 @@ export class ContextView implements vscode.WebviewViewProvider {
             (state.dependencies.total_count === 1 ? 'file depends' : 'files depend') + ' on this</div>' +
           '<div class="deps-direct">Direct: ' + state.dependencies.direct_dependents.length + '</div>' +
           '</div>' +
-          '<button class="button" onclick="showDependents()">Show</button>' +
+          '<button class="button" data-action="showDependents">Show</button>' +
           '</div>'
         : '';
 
@@ -680,7 +680,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
       
       const funcName = active ? getFunctionName(active.name) : '';
-      const pinButton = !pinned ? '<button class="button" onclick="pinCurrent()">Pin</button>' : '';
+      const pinButton = !pinned ? '<button class="button" data-action="pin">Pin</button>' : '';
 
       const symbolBody = active
         ? (
@@ -805,7 +805,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         const indent = '&nbsp;&nbsp;'.repeat(indentLevel);
         const connector = (idx === 0 && !hasRoute) ? '' : '└─ ';
         
-        treeHtml += "<div class='caller-tree-item' onclick='openFile(" + JSON.stringify(c.file) + ")'>" +
+        treeHtml += "<div class='caller-tree-item' data-action='openFile' data-file='" + esc(c.file) + "'>" +
           "<span class='tree-indent'>" + indent + connector + "</span>" +
           "<span class='caller-name'>" + esc(c.name) + "()</span>" +
           "</div>";
@@ -872,26 +872,33 @@ export class ContextView implements vscode.WebviewViewProvider {
         "</div>";
     }
 
-    function openFile(filePath) {
-      vscode.postMessage({ command: 'openFile', filePath });
-    }
-
-    function openLink(url) {
-      vscode.postMessage({ command: 'openLink', url });
-    }
-
-    function pinCurrent() {
-      if (!window.__lastState || !window.__lastState.activeImpact) return;
-      vscode.postMessage({ command: 'pinImpact', impact: window.__lastState.activeImpact });
-    }
-
-    function unpin() {
-      vscode.postMessage({ command: 'unpinImpact' });
-    }
-
-    function showDependents() {
-      vscode.postMessage({ command: 'showDependents' });
-    }
+    // Event delegation for all clickable elements (CSP-safe, no inline onclick)
+    document.addEventListener('click', (event) => {
+      const target = event.target.closest('[data-action]');
+      if (!target) return;
+      
+      const action = target.dataset.action;
+      
+      switch (action) {
+        case 'openFile':
+          vscode.postMessage({ command: 'openFile', filePath: target.dataset.file });
+          break;
+        case 'openLink':
+          vscode.postMessage({ command: 'openLink', url: target.dataset.url });
+          break;
+        case 'pin':
+          if (window.__lastState && window.__lastState.activeImpact) {
+            vscode.postMessage({ command: 'pinImpact', impact: window.__lastState.activeImpact });
+          }
+          break;
+        case 'unpin':
+          vscode.postMessage({ command: 'unpinImpact' });
+          break;
+        case 'showDependents':
+          vscode.postMessage({ command: 'showDependents' });
+          break;
+      }
+    });
 
     window.addEventListener('message', (event) => {
       const message = event.data;
