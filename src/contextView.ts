@@ -410,6 +410,47 @@ export class ContextView implements vscode.WebviewViewProvider {
       color: var(--vscode-descriptionForeground);
     }
 
+    /* SLOs */
+    .slo-list {
+      margin: 4px 0 8px 6px;
+      padding-left: 8px;
+      border-left: 2px solid var(--vscode-charts-yellow);
+    }
+
+    .slo-item {
+      padding: 4px 6px;
+      border-radius: 4px;
+      margin-bottom: 2px;
+    }
+
+    .slo-link {
+      text-decoration: none;
+      display: block;
+    }
+
+    .slo-link:hover .slo-item {
+      background: var(--vscode-list-hoverBackground);
+    }
+
+    .slo-name {
+      font-size: 11px;
+      color: var(--vscode-foreground);
+    }
+
+    .slo-meta {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+    }
+
+    .slo-item.low-budget {
+      border-left: 2px solid var(--vscode-charts-red);
+      padding-left: 4px;
+    }
+
+    .slo-item.low-budget .slo-meta {
+      color: var(--vscode-charts-red);
+    }
+
     /* Signals/Findings */
     .signals-list {
       margin-top: 4px;
@@ -715,6 +756,33 @@ export class ContextView implements vscode.WebviewViewProvider {
           "<span class='route-method'>" + esc(route.method) + "</span> " +
           "<span class='route-path'>" + esc(route.path) + "</span>" +
           "</div>";
+        
+        // Show SLOs that might be impacted
+        if (route.slos && route.slos.length > 0) {
+          treeHtml += "<div class='slo-list'>";
+          for (const slo of route.slos) {
+            const budgetClass = slo.error_budget_remaining != null && slo.error_budget_remaining < 20 ? 'low-budget' : '';
+            const budgetText = slo.error_budget_remaining != null 
+              ? esc(slo.error_budget_remaining.toFixed(1)) + '% budget left'
+              : '';
+            const targetText = slo.target_percent != null
+              ? esc(slo.target_percent.toFixed(2)) + '% target'
+              : '';
+            const meta = [targetText, budgetText].filter(Boolean).join(' · ');
+            
+            const sloContent = "<div class='slo-item " + budgetClass + "'>" +
+              "<div class='slo-name'>" + esc(slo.name) + "</div>" +
+              (meta ? "<div class='slo-meta'>" + meta + "</div>" : "") +
+              "</div>";
+            
+            if (slo.dashboard_url) {
+              treeHtml += "<a class='slo-link' href='" + esc(slo.dashboard_url) + "' target='_blank'>" + sloContent + "</a>";
+            } else {
+              treeHtml += sloContent;
+            }
+          }
+          treeHtml += "</div>";
+        }
       }
 
       // Render each caller in the chain
