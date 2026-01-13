@@ -757,10 +757,17 @@ export class ContextView implements vscode.WebviewViewProvider {
           "<span class='route-path'>" + esc(route.path) + "</span>" +
           "</div>";
         
-        // Show SLOs that might be impacted
+        // Show SLOs that might be impacted (deduplicate by name)
         if (route.slos && route.slos.length > 0) {
+          const seenSlos = new Set();
+          const uniqueSlos = route.slos.filter(slo => {
+            if (seenSlos.has(slo.name)) return false;
+            seenSlos.add(slo.name);
+            return true;
+          });
+          
           treeHtml += "<div class='slo-list'>";
-          for (const slo of route.slos) {
+          for (const slo of uniqueSlos) {
             const budgetClass = slo.error_budget_remaining != null && slo.error_budget_remaining < 20 ? 'low-budget' : '';
             const budgetText = slo.error_budget_remaining != null 
               ? esc(slo.error_budget_remaining.toFixed(1)) + '% budget left'
