@@ -703,6 +703,40 @@ export function activate(context: vscode.ExtensionContext) {
   let followCursorTimer: NodeJS.Timeout | null = null;
   let lastFollowedKey: string | null = null;
 
+  // Invalidate function impact cache when document changes (e.g., quick fix applied)
+  let documentChangeTimer: NodeJS.Timeout | null = null;
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      // Clear lastFollowedKey to force re-fetch of function impact
+      // This ensures "Worth a Look" updates after fixes are applied
+      if (lastFollowedKey && lastFollowedKey.startsWith(e.document.uri.toString())) {
+        lastFollowedKey = null;
+        
+        // Debounced refresh: wait for LSP analysis to complete, then re-fetch impact
+        if (documentChangeTimer) {
+          clearTimeout(documentChangeTimer);
+        }
+        documentChangeTimer = setTimeout(async () => {
+          const editor = vscode.window.activeTextEditor;
+          if (!editor || !contextView || !client || serverState !== 'running') return;
+          if (editor.document.uri.toString() !== e.document.uri.toString()) return;
+          
+          const position = editor.selection.active;
+          const functionName = await getFunctionNameAtPosition(editor.document, position);
+          if (functionName) {
+            const impactData = await getFunctionImpact(client, {
+              uri: editor.document.uri.toString(),
+              functionName,
+              position: { line: position.line, character: position.character }
+            });
+            contextView.setActiveImpact(impactData);
+            lastFollowedKey = `${editor.document.uri.toString()}::${functionName}`;
+          }
+        }, 1500); // Wait 1.5s for LSP analysis to complete
+      }
+    })
+  );
+
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorSelection((e) => {
       console.log('[Unfault] Selection changed', { 
