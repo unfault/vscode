@@ -364,24 +364,7 @@ export class ContextView implements vscode.WebviewViewProvider {
     .call-tree {
       margin-top: 4px;
       font-family: var(--vscode-editor-font-family);
-    }
-
-    .route-header {
-      padding: 4px 6px;
-      margin-bottom: 4px;
-      background: var(--vscode-textBlockQuote-background);
-      border-radius: 4px;
-    }
-
-    .route-method {
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--vscode-charts-green);
-    }
-
-    .route-path {
       font-size: 11px;
-      color: var(--vscode-foreground);
     }
 
     .caller-tree-item {
@@ -392,6 +375,26 @@ export class ContextView implements vscode.WebviewViewProvider {
 
     .caller-tree-item:hover {
       background: var(--vscode-list-hoverBackground);
+    }
+
+    .caller-tree-item.route-item {
+      cursor: default;
+      font-weight: 500;
+    }
+
+    .caller-tree-item.route-item:hover {
+      background: transparent;
+    }
+
+    .route-method {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--vscode-charts-green);
+      text-transform: uppercase;
+    }
+
+    .route-path {
+      color: var(--vscode-foreground);
     }
 
     .caller-tree-item.target {
@@ -405,7 +408,6 @@ export class ContextView implements vscode.WebviewViewProvider {
 
     .tree-indent {
       color: var(--vscode-descriptionForeground);
-      font-size: 11px;
     }
 
     /* Signals/Findings */
@@ -646,8 +648,8 @@ export class ContextView implements vscode.WebviewViewProvider {
           pinButton +
           '</div>' +
           buildSymbolStory(active) +
-          renderCallers(active) +
           renderSignals(active) +
+          renderCallers(active) +
           renderPathInsights(active)
         )
         : '<div class="muted">Move your cursor inside a function to see its context.</div>';
@@ -692,20 +694,36 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
 
       // Get the root (entry point with highest depth)
-      const root = sortedCallers[0];
-      if (!root) return '';
+      const rootCaller = sortedCallers[0];
+      if (!rootCaller) return '';
 
-      const chain = buildChain(root.name);
-      const targetName = impact.name || 'target';
+      const chain = buildChain(rootCaller.name);
+      
+      // Extract target function name (remove file: prefix if present)
+      const targetFullName = impact.name || 'target';
+      const targetParts = targetFullName.split(':');
+      const targetFile = targetParts.length > 1 ? targetParts[0] : '';
+      const targetFunc = targetParts.length > 1 ? targetParts[targetParts.length - 1] : targetFullName;
 
       // Render as a tree
       let treeHtml = '';
+      
+      // Show route at the top if available
+      if (impact.routes && impact.routes.length > 0) {
+        const route = impact.routes[0];
+        treeHtml += "<div class='caller-tree-item route-item'>" +
+          "<span class='route-method'>" + esc(route.method) + "</span> " +
+          "<span class='route-path'>" + esc(route.path) + "</span>" +
+          "</div>";
+      }
+
+      // Render each caller in the chain
       chain.forEach((c, idx) => {
-        const indent = '&nbsp;&nbsp;'.repeat(idx);
-        const connector = idx === 0 ? '' : '└─ ';
-        const isRoute = impact.routes && impact.routes.some(r => 
-          c.name && (c.name.includes(r.path) || r.path)
-        );
+        // Indent increases for each level; first level has no connector if route shown
+        const hasRoute = impact.routes && impact.routes.length > 0;
+        const indentLevel = hasRoute ? idx : idx;
+        const indent = '&nbsp;&nbsp;'.repeat(indentLevel);
+        const connector = (idx === 0 && !hasRoute) ? '' : '└─ ';
         
         treeHtml += "<div class='caller-tree-item' onclick='openFile(" + JSON.stringify(c.file) + ")'>" +
           "<span class='tree-indent'>" + indent + connector + "</span>" +
@@ -713,27 +731,21 @@ export class ContextView implements vscode.WebviewViewProvider {
           "</div>";
       });
 
-      // Add the target function at the bottom
-      const targetIndent = '&nbsp;&nbsp;'.repeat(chain.length);
-      const targetConnector = chain.length > 0 ? '└─ ' : '';
+      // Add the target function at the bottom with file:func() format
+      const hasRoute = impact.routes && impact.routes.length > 0;
+      const targetIndentLevel = hasRoute ? chain.length : chain.length;
+      const targetIndent = '&nbsp;&nbsp;'.repeat(targetIndentLevel);
+      const targetConnector = chain.length > 0 || hasRoute ? '└─ ' : '';
+      const targetDisplay = targetFile ? targetFile + ':' + targetFunc : targetFunc;
+      
       treeHtml += "<div class='caller-tree-item target'>" +
         "<span class='tree-indent'>" + targetIndent + targetConnector + "</span>" +
-        "<span class='caller-name'>" + esc(targetName) + "() ← you are here</span>" +
+        "<span class='caller-name'>" + esc(targetDisplay) + "() ← you are here</span>" +
         "</div>";
-
-      // Show route info at the top if available
-      let routeHeader = '';
-      if (impact.routes && impact.routes.length > 0) {
-        const route = impact.routes[0];
-        routeHeader = "<div class='route-header'>" +
-          "<span class='route-method'>" + esc(route.method) + "</span> " +
-          "<span class='route-path'>" + esc(route.path) + "</span>" +
-          "</div>";
-      }
 
       return "<div style='margin-top: 8px;'>" +
         "<div class='section-label'>CALL PATH</div>" +
-        "<div class='call-tree'>" + routeHeader + treeHtml + "</div>" +
+        "<div class='call-tree'>" + treeHtml + "</div>" +
         "</div>";
     }
 
