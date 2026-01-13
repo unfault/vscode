@@ -110,6 +110,10 @@ let currentCentrality: FileCentralityNotification | null = null;
 // Track current dependencies for the active file
 let currentDependencies: FileDependenciesNotification | null = null;
 
+// Cache centrality and dependencies per file path (for when switching back to files)
+const centralityCache = new Map<string, FileCentralityNotification>();
+const dependenciesCache = new Map<string, FileDependenciesNotification>();
+
 // Track server state
 let serverState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
 
@@ -496,6 +500,10 @@ function updateStatusBar() {
  */
 function setCentrality(centrality: FileCentralityNotification | null) {
   currentCentrality = centrality;
+  // Cache by file path for when user switches back to this file
+  if (centrality) {
+    centralityCache.set(centrality.path, centrality);
+  }
   contextView?.setCentrality(centrality);
   updateStatusBar();
 }
@@ -505,6 +513,10 @@ function setCentrality(centrality: FileCentralityNotification | null) {
  */
 function setDependencies(dependencies: FileDependenciesNotification | null) {
   currentDependencies = dependencies;
+  // Cache by file path for when user switches back to this file
+  if (dependencies) {
+    dependenciesCache.set(dependencies.path, dependencies);
+  }
   contextView?.setDependencies(dependencies);
 }
 
@@ -653,9 +665,35 @@ export function activate(context: vscode.ExtensionContext) {
   // Update status bar when active editor changes
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {
-      // Clear centrality and dependencies when switching files (will be updated by server)
-      currentCentrality = null;
-      currentDependencies = null;
+      // Try to restore centrality and dependencies from cache when switching files
+      // This provides instant feedback instead of waiting for the server
+      if (editor) {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+        if (workspaceFolder) {
+          const relativePath = vscode.workspace.asRelativePath(editor.document.uri, false);
+          
+          // Restore from cache if available
+          const cachedCentrality = centralityCache.get(relativePath);
+          const cachedDependencies = dependenciesCache.get(relativePath);
+          
+          currentCentrality = cachedCentrality ?? null;
+          currentDependencies = cachedDependencies ?? null;
+          
+          contextView?.setCentrality(currentCentrality);
+          contextView?.setDependencies(currentDependencies);
+        } else {
+          currentCentrality = null;
+          currentDependencies = null;
+          contextView?.setCentrality(null);
+          contextView?.setDependencies(null);
+        }
+      } else {
+        currentCentrality = null;
+        currentDependencies = null;
+        contextView?.setCentrality(null);
+        contextView?.setDependencies(null);
+      }
+      
       contextView?.setActiveEditor(editor ?? null);
       updateStatusBar();
     })
