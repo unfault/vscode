@@ -322,6 +322,44 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
     .story strong { color: var(--vscode-foreground); }
 
+    /* Caller table */
+    .caller-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      font-size: 11px;
+    }
+    .caller-table th {
+      text-align: left;
+      font-weight: 500;
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground);
+      padding: 2px 6px;
+      border-bottom: 1px solid var(--vscode-widget-border);
+    }
+    .caller-table th:last-child {
+      text-align: right;
+      width: 40px;
+    }
+    .caller-table tr {
+      cursor: pointer;
+    }
+    .caller-table tr:hover {
+      background: var(--vscode-list-hoverBackground);
+    }
+    .caller-table td {
+      padding: 3px 6px;
+    }
+    .caller-name-cell {
+      font-family: var(--vscode-editor-font-family);
+      color: var(--vscode-foreground);
+    }
+    .caller-depth-cell {
+      text-align: right;
+      color: var(--vscode-descriptionForeground);
+      font-family: var(--vscode-editor-font-family);
+    }
+
     /* Callers list */
     .callers-list {
       margin-top: 4px;
@@ -507,36 +545,41 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     function buildSymbolStory(impact) {
-      // Build a concise narrative like the landing page: 
-      // "Reachable from POST /checkout. Called from 3 places."
-      const parts = [];
+      // Build a concise summary with route info and caller table
+      let html = '';
 
       const routeCount = (impact.routes && impact.routes.length) || 0;
-      const callerCount = (impact.callers && impact.callers.length) || 0;
+      const callers = impact.callers || [];
 
       // Route info
       if (routeCount > 0) {
         const firstRoute = impact.routes[0];
         const routeStr = firstRoute.method + ' ' + firstRoute.path;
         if (routeCount === 1) {
-          parts.push('Reachable from <strong>' + esc(routeStr) + '</strong>.');
+          html += '<p class="story">Reachable from <strong>' + esc(routeStr) + '</strong></p>';
         } else {
-          parts.push('Reachable from <strong>' + esc(routeStr) + '</strong> + ' + (routeCount - 1) + ' more.');
+          html += '<p class="story">Reachable from <strong>' + esc(routeStr) + '</strong> + ' + (routeCount - 1) + ' more</p>';
         }
       }
 
-      // Caller count
-      if (callerCount === 1) {
-        parts.push('Called from <strong>1 place</strong>.');
-      } else if (callerCount > 1) {
-        parts.push('Called from <strong>' + callerCount + ' places</strong>.');
+      // Caller table
+      if (callers.length > 0) {
+        html += '<table class="caller-table">';
+        html += '<thead><tr><th>Caller</th><th>Hops</th></tr></thead>';
+        html += '<tbody>';
+        for (const c of callers) {
+          const funcName = c.name || c.function || 'unknown';
+          html += '<tr data-action="openFile" data-file="' + esc(c.file) + '">';
+          html += '<td class="caller-name-cell">' + esc(funcName) + '()</td>';
+          html += '<td class="caller-depth-cell">' + c.depth + '</td>';
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+      } else if (routeCount === 0) {
+        html += '<p class="story muted">No call paths found yet.</p>';
       }
 
-      if (parts.length === 0) {
-        return '<p class="story">No call paths found yet.</p>';
-      }
-
-      return '<p class="story">' + parts.join(' ') + '</p>';
+      return html;
     }
 
     function renderSlos(impact) {
