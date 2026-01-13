@@ -35,6 +35,7 @@ interface FunctionImpactData {
     name: string;
     file: string;
     depth: number;
+    calls?: string;
   }>;
   routes: Array<{
     method: string;
