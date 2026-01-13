@@ -117,6 +117,9 @@ const dependenciesCache = new Map<string, FileDependenciesNotification>();
 // Track server state
 let serverState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
 
+// Code lens provider instance (for refreshing on analysis complete)
+let codeLensProviderInstance: ImpactCodeLensProvider | null = null;
+
 class ImpactCodeLensProvider implements vscode.CodeLensProvider {
   private _onDidChangeCodeLenses = new vscode.EventEmitter<void>();
   public readonly onDidChangeCodeLenses = this._onDidChangeCodeLenses.event;
@@ -575,6 +578,29 @@ function registerClientHandlers(lspClient: LanguageClient) {
   lspClient.onNotification('unfault/fileDependencies', (params: FileDependenciesNotification) => {
     setDependencies(params);
   });
+
+  // Listen for analysis complete to refresh code lenses and sidebar
+  lspClient.onNotification('unfault/analysisComplete', async (params: { uri: string; finding_count: number }) => {
+    console.log('[Unfault] Analysis complete for', params.uri, 'findings:', params.finding_count);
+    
+    // Refresh code lenses to show updated finding counts
+    codeLensProviderInstance?.refresh();
+    
+    // Refresh sidebar if viewing the same file
+    const editor = vscode.window.activeTextEditor;
+    if (editor && contextView && editor.document.uri.toString() === params.uri) {
+      const position = editor.selection.active;
+      const functionName = await getFunctionNameAtPosition(editor.document, position);
+      if (functionName) {
+        const impactData = await getFunctionImpact(lspClient, {
+          uri: params.uri,
+          functionName,
+          position: { line: position.line, character: position.character }
+        });
+        contextView.setActiveImpact(impactData);
+      }
+    }
+  });
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -596,6 +622,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register code lens provider
   const codeLensProvider = new ImpactCodeLensProvider();
+  codeLensProviderInstance = codeLensProvider; // Store for notification handler
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(
     [
       { scheme: 'file', language: 'python' },
@@ -703,36 +730,13 @@ export function activate(context: vscode.ExtensionContext) {
   let followCursorTimer: NodeJS.Timeout | null = null;
   let lastFollowedKey: string | null = null;
 
-  // Refresh function impact after document is saved (analysis runs on save)
-  let documentSaveTimer: NodeJS.Timeout | null = null;
+  // Clear lastFollowedKey on save to force re-fetch when analysis completes
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      // Clear lastFollowedKey to force re-fetch of function impact
-      // This ensures "Worth a Look" updates after fixes are applied and saved
+      // Clear lastFollowedKey to force re-fetch of function impact when analysis completes
+      // The actual refresh happens via the unfault/analysisComplete notification
       if (lastFollowedKey && lastFollowedKey.startsWith(doc.uri.toString())) {
         lastFollowedKey = null;
-        
-        // Debounced refresh: wait for LSP analysis to complete, then re-fetch impact
-        if (documentSaveTimer) {
-          clearTimeout(documentSaveTimer);
-        }
-        documentSaveTimer = setTimeout(async () => {
-          const editor = vscode.window.activeTextEditor;
-          if (!editor || !contextView || !client || serverState !== 'running') return;
-          if (editor.document.uri.toString() !== doc.uri.toString()) return;
-          
-          const position = editor.selection.active;
-          const functionName = await getFunctionNameAtPosition(editor.document, position);
-          if (functionName) {
-            const impactData = await getFunctionImpact(client, {
-              uri: editor.document.uri.toString(),
-              functionName,
-              position: { line: position.line, character: position.character }
-            });
-            contextView.setActiveImpact(impactData);
-            lastFollowedKey = `${editor.document.uri.toString()}::${functionName}`;
-          }
-        }, 1000); // Wait 1s for LSP analysis to complete
       }
     })
   );
