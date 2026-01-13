@@ -23,6 +23,14 @@ export interface FunctionImpactData {
     message: string;
     learnMore?: string;
   }>;
+  insights?: Array<{
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+  }>;
+  pathInsights?: Array<{
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+  }>;
 }
 
 export interface FileCentralityNotification {
