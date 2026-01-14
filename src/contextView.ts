@@ -36,11 +36,31 @@ export interface FunctionImpactData {
   upstreamInsights?: Array<{
     severity: 'error' | 'warning' | 'info';
     message: string;
+    /** Optional: detailed title of the underlying finding */
+    title?: string;
+    /** Optional: full description explaining the issue */
+    description?: string;
+    /** Optional: file path where the issue occurs */
+    file?: string;
+    /** Optional: line number (1-based) */
+    line?: number;
+    /** Optional: rule ID for documentation lookup */
+    ruleId?: string;
   }>;
   /** Human-friendly insights about issues in downstream callees */
   downstreamInsights?: Array<{
     severity: 'error' | 'warning' | 'info';
     message: string;
+    /** Optional: detailed title of the underlying finding */
+    title?: string;
+    /** Optional: full description explaining the issue */
+    description?: string;
+    /** Optional: file path where the issue occurs */
+    file?: string;
+    /** Optional: line number (1-based) */
+    line?: number;
+    /** Optional: rule ID for documentation lookup */
+    ruleId?: string;
   }>;
 }
 
@@ -548,6 +568,56 @@ export class ContextView implements vscode.WebviewViewProvider {
       color: var(--vscode-foreground);
     }
 
+    .signal.expandable {
+      cursor: pointer;
+    }
+
+    .signal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .signal-toggle {
+      font-size: 8px;
+      color: var(--vscode-descriptionForeground);
+      transition: transform 0.15s ease;
+    }
+
+    .signal.expanded .signal-toggle {
+      transform: rotate(90deg);
+    }
+
+    .signal-detail {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--vscode-widget-border);
+      font-size: 10px;
+    }
+
+    .detail-title {
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--vscode-foreground);
+    }
+
+    .detail-desc {
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.4;
+      margin-bottom: 6px;
+      white-space: pre-wrap;
+    }
+
+    .detail-loc {
+      color: var(--vscode-textLink-foreground);
+      cursor: pointer;
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    .detail-loc:hover {
+      text-decoration: underline;
+    }
+
     /* Pinned banner */
     .pinned-banner {
       background: var(--vscode-editor-inactiveSelectionBackground);
@@ -957,11 +1027,45 @@ export class ContextView implements vscode.WebviewViewProvider {
         return '';
       }
 
-      const items = insights.map(i => {
+      const items = insights.map((i, idx) => {
         const sev = i.severity || 'info';
-        return "<div class='signal " + sev + "'>" +
-          "<span class='signal-content'>" + esc(i.message) + "</span>" +
-          "</div>";
+        const hasDetails = i.title || i.description || i.file;
+        const detailId = label.replace(/\\s+/g, '-').toLowerCase() + '-detail-' + idx;
+        
+        let html = "<div class='signal " + sev + (hasDetails ? " expandable" : "") + "'>";
+        
+        if (hasDetails) {
+          // Clickable header that expands details
+          html += "<div class='signal-header' data-action='toggleDetail' data-detail-id='" + detailId + "'>";
+          html += "<span class='signal-content'>" + esc(i.message) + "</span>";
+          html += "<span class='signal-toggle'>▶</span>";
+          html += "</div>";
+          
+          // Collapsible detail section
+          html += "<div id='" + detailId + "' class='signal-detail' style='display: none;'>";
+          
+          if (i.title && i.title !== i.message) {
+            html += "<div class='detail-title'>" + esc(i.title) + "</div>";
+          }
+          
+          if (i.description) {
+            html += "<div class='detail-desc'>" + esc(i.description) + "</div>";
+          }
+          
+          if (i.file) {
+            const loc = i.line ? i.file + ':' + i.line : i.file;
+            html += "<div class='detail-loc' data-action='openFile' data-file='" + esc(i.file) + "'>";
+            html += "📍 " + esc(loc);
+            html += "</div>";
+          }
+          
+          html += "</div>";
+        } else {
+          html += "<span class='signal-content'>" + esc(i.message) + "</span>";
+        }
+        
+        html += "</div>";
+        return html;
       }).join('');
 
       return "<div style='margin-top: 8px;'>" +
@@ -1037,6 +1141,16 @@ export class ContextView implements vscode.WebviewViewProvider {
             const isHidden = list.style.display === 'none';
             list.style.display = isHidden ? 'block' : 'none';
             target.textContent = isHidden ? 'Hide' : 'Show';
+          }
+          break;
+        case 'toggleDetail':
+          const detailId = target.dataset.detailId;
+          const detail = document.getElementById(detailId);
+          const signal = target.closest('.signal');
+          if (detail && signal) {
+            const isHidden = detail.style.display === 'none';
+            detail.style.display = isHidden ? 'block' : 'none';
+            signal.classList.toggle('expanded', isHidden);
           }
           break;
       }
