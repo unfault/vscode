@@ -1017,7 +1017,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       }).join('');
 
       return "<div style='margin-top: 8px;'>" +
-        "<div class='section-label'>WORTH A LOOK</div>" +
+        "<div class='section-label'>HEADS UP</div>" +
         "<div class='signals-list'>" + items + "</div>" +
         "</div>";
     }
@@ -1078,12 +1078,12 @@ export class ContextView implements vscode.WebviewViewProvider {
       // New format: upstream and downstream insights (human-friendly summaries)
       const upstreamHtml = renderInsightsList(
         impact.upstreamInsights, 
-        "UPSTREAM RISKS", 
+        "UPSTREAM", 
         "↑"
       );
       const downstreamHtml = renderInsightsList(
         impact.downstreamInsights, 
-        "DOWNSTREAM RISKS", 
+        "DOWNSTREAM", 
         "↓"
       );
 
@@ -1102,7 +1102,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         }).join('');
 
         return "<div style='margin-top: 8px;'>" +
-          "<div class='section-label'>ON THIS PATH</div>" +
+          "<div class='section-label'>ALONG THE WAY</div>" +
           "<div class='signals-list'>" + items + "</div>" +
           "</div>";
       }
