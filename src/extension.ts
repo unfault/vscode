@@ -81,6 +81,78 @@ async function getFunctionImpact(
 }
 
 /**
+ * Request file centrality data from the LSP server
+ */
+async function getFileCentrality(
+  lspClient: LanguageClient,
+  uri: string
+): Promise<FileCentralityNotification | null> {
+  try {
+    const result = await lspClient.sendRequest(
+      ExecuteCommandRequest.type,
+      {
+        command: 'unfault/getFileCentrality',
+        arguments: [{ uri }]
+      }
+    );
+    return (result as FileCentralityNotification | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Request file dependencies data from the LSP server
+ */
+async function getFileDependencies(
+  lspClient: LanguageClient,
+  uri: string
+): Promise<FileDependenciesNotification | null> {
+  try {
+    const result = await lspClient.sendRequest(
+      ExecuteCommandRequest.type,
+      {
+        command: 'unfault/getFileDependencies',
+        arguments: [{ uri }]
+      }
+    );
+    return (result as FileDependenciesNotification | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Response from refreshFile command
+ */
+interface RefreshFileResponse {
+  success: boolean;
+  finding_count: number;
+}
+
+/**
+ * Request re-analysis of a single file
+ * This triggers full analysis (IR build + API call) and updates findings
+ */
+async function refreshFile(
+  lspClient: LanguageClient,
+  uri: string
+): Promise<RefreshFileResponse | null> {
+  try {
+    const result = await lspClient.sendRequest(
+      ExecuteCommandRequest.type,
+      {
+        command: 'unfault/refreshFile',
+        arguments: [{ uri }]
+      }
+    );
+    return (result as RefreshFileResponse | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * File centrality notification from the LSP server
  */
 interface FileCentralityNotification {
@@ -110,9 +182,7 @@ let currentCentrality: FileCentralityNotification | null = null;
 // Track current dependencies for the active file
 let currentDependencies: FileDependenciesNotification | null = null;
 
-// Cache centrality and dependencies per file path (for when switching back to files)
-const centralityCache = new Map<string, FileCentralityNotification>();
-const dependenciesCache = new Map<string, FileDependenciesNotification>();
+
 
 // Track server state
 let serverState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
@@ -503,10 +573,6 @@ function updateStatusBar() {
  */
 function setCentrality(centrality: FileCentralityNotification | null) {
   currentCentrality = centrality;
-  // Cache by file path for when user switches back to this file
-  if (centrality) {
-    centralityCache.set(centrality.path, centrality);
-  }
   contextView?.setCentrality(centrality);
   updateStatusBar();
 }
@@ -516,11 +582,50 @@ function setCentrality(centrality: FileCentralityNotification | null) {
  */
 function setDependencies(dependencies: FileDependenciesNotification | null) {
   currentDependencies = dependencies;
-  // Cache by file path for when user switches back to this file
-  if (dependencies) {
-    dependenciesCache.set(dependencies.path, dependencies);
-  }
   contextView?.setDependencies(dependencies);
+}
+
+/**
+ * Refresh file centrality and dependencies for the given URI by requesting fresh data from LSP
+ */
+async function refreshFileContext(uri: string): Promise<void> {
+  if (!client || serverState !== 'running') {
+    return;
+  }
+
+  try {
+    // Request fresh centrality and dependencies in parallel
+    const [centrality, dependencies] = await Promise.all([
+      getFileCentrality(client, uri),
+      getFileDependencies(client, uri),
+    ]);
+
+    setCentrality(centrality);
+    setDependencies(dependencies);
+  } catch (e) {
+    console.error('[Unfault] Failed to refresh file context:', e);
+  }
+}
+
+/**
+ * Trigger full re-analysis of a file (including findings refresh)
+ * This is more expensive than refreshFileContext but updates findings
+ */
+async function refreshFileAnalysis(uri: string): Promise<void> {
+  if (!client || serverState !== 'running') {
+    return;
+  }
+
+  try {
+    console.log('[Unfault] Refreshing file analysis:', uri);
+    const result = await refreshFile(client, uri);
+    if (result) {
+      console.log('[Unfault] File refresh complete, findings:', result.finding_count);
+    }
+    // Note: The analysisComplete notification will trigger sidebar refresh
+  } catch (e) {
+    console.error('[Unfault] Failed to refresh file analysis:', e);
+  }
 }
 
 /**
@@ -692,43 +797,53 @@ export function activate(context: vscode.ExtensionContext) {
   // Update status bar when active editor changes
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {
-      // Try to restore centrality and dependencies from cache when switching files
-      // This provides instant feedback instead of waiting for the server
-      if (editor) {
-        const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-        if (workspaceFolder) {
-          const relativePath = vscode.workspace.asRelativePath(editor.document.uri, false);
-          
-          // Restore from cache if available
-          const cachedCentrality = centralityCache.get(relativePath);
-          const cachedDependencies = dependenciesCache.get(relativePath);
-          
-          currentCentrality = cachedCentrality ?? null;
-          currentDependencies = cachedDependencies ?? null;
-          
-          contextView?.setCentrality(currentCentrality);
-          contextView?.setDependencies(currentDependencies);
-        } else {
-          currentCentrality = null;
-          currentDependencies = null;
-          contextView?.setCentrality(null);
-          contextView?.setDependencies(null);
-        }
-      } else {
-        currentCentrality = null;
-        currentDependencies = null;
-        contextView?.setCentrality(null);
-        contextView?.setDependencies(null);
-      }
+      // Clear centrality/dependencies immediately for instant feedback
+      currentCentrality = null;
+      currentDependencies = null;
+      contextView?.setCentrality(null);
+      contextView?.setDependencies(null);
       
       contextView?.setActiveEditor(editor ?? null);
       updateStatusBar();
+
+      // Request fresh data from LSP for the new file
+      if (editor) {
+        const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
+        if (supportedLanguages.includes(editor.document.languageId)) {
+          refreshFileContext(editor.document.uri.toString());
+        }
+      }
     })
   );
 
   // Follow cursor and update the context sidebar
   let followCursorTimer: NodeJS.Timeout | null = null;
   let lastFollowedKey: string | null = null;
+
+  // Debounced refresh for document changes (e.g., after quick fix applied)
+  let documentChangeTimer: NodeJS.Timeout | null = null;
+
+  // Refresh file analysis (including findings) after document changes
+  // This ensures the sidebar updates after quick fixes are applied
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      // Only refresh for supported languages
+      const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
+      if (!supportedLanguages.includes(e.document.languageId)) {
+        return;
+      }
+
+      // Debounce to avoid excessive requests during typing
+      // Using longer delay (1.5s) since this triggers full re-analysis
+      if (documentChangeTimer) {
+        clearTimeout(documentChangeTimer);
+      }
+
+      documentChangeTimer = setTimeout(() => {
+        refreshFileAnalysis(e.document.uri.toString());
+      }, 1500); // 1.5s debounce for full analysis
+    })
+  );
 
   // Clear lastFollowedKey on save to force re-fetch when analysis completes
   context.subscriptions.push(
