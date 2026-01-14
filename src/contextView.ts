@@ -760,14 +760,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       const pinned = state.pinnedImpact;
       const active = pinned || state.activeImpact;
 
-      const pinnedBanner = pinned
-        ? '<div class="pinned-banner">' +
-          '<div class="row">' +
-          '<span class="card-title">Pinned</span>' +
-          '<button class="button" data-action="unpin">Unpin</button>' +
-          '</div>' +
-          '</div>'
-        : '';
+
 
       // === FILE CARD ===
       const fileName = state.centrality ? state.centrality.path.split('/').pop() : '';
@@ -851,13 +844,11 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
       
       const funcName = active ? getFunctionName(active.name) : '';
-      const pinButton = !pinned ? '<button class="button" data-action="pin">Pin</button>' : '';
 
       const symbolBody = active
         ? (
           '<div class="card-header">' +
           '<span class="symbol-name">' + esc(funcName) + '</span>' +
-          pinButton +
           '</div>' +
           buildSymbolStory(active) +
           renderSignals(active) +
@@ -873,7 +864,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         '</div>' +
         '</div>';
 
-      root.innerHTML = serverLine + pinnedBanner + fileCard + symbolCard;
+      root.innerHTML = serverLine + fileCard + symbolCard;
     }
 
     function renderCallers(impact) {
