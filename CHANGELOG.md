@@ -5,7 +5,34 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] - 2025-12-22
+## [0.9.1] - 2026-01-14
+
+### Added
+- Added expandable insights with finding details in sidebar.
+- Added insights and pathInsights to FunctionImpactData interface.
+- Added SLOs display and impact information in sidebar.
+- Added caller table with hop counts.
+- Added collapsible importers list in FILE card.
+- Added call path tree view for route handlers.
+- Added SLO health display and inherited SLO impact for nested functions.
+- Added softer phrasing for missing SLO info.
+- Added refresh findings after document changes via single-file analysis.
+- Added refresh on analysis complete notification.
+
+### Changed
+- Softened tone to match calm, helpful voice across sidebar UI.
+- Increased insight detail font size from 10px to 11px for readability.
+- Refresh function impact on save instead of on change.
+
+### Fixed
+- Use human-friendly insights instead of raw risk categories.
+- Fixed sidebar refresh function impact after document changes.
+- Fixed sidebar cache and restore centrality/dependencies when switching files.
+- Fixed sidebar show call path for route handlers with no callers.
+- Fixed sidebar deduplicate SLOs by name.
+- Fixed sidebar use event delegation for button clicks (CSP-safe).
+- Fixed register and render context view properly after webview loads.
+- Sidebar sections reordered and call path tree improved.
 
 ### Added
 
@@ -136,3 +163,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `unfault.debounceMs` - Debounce delay for analysis
   - `unfault.profile` - Profile selection (auto or language-specific)
 - **LSP Profiles**: Uses language-specific LSP profiles to avoid false positives in single-file analysis
+
+[0.9.1]: https://github.com/unfault/vscode/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/unfault/vscode/releases/tag/v0.9.0
