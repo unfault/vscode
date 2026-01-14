@@ -1,5 +1,18 @@
 import * as vscode from 'vscode';
 
+export interface RiskCategory {
+  category: string;
+  count: number;
+  severity: string;
+  example_locations: string[];
+}
+
+export interface RiskSummary {
+  total_findings: number;
+  total_affected_functions: number;
+  categories: RiskCategory[];
+}
+
 export interface FunctionImpactData {
   name: string;
   callers: Array<{
@@ -27,10 +40,13 @@ export interface FunctionImpactData {
     severity: 'error' | 'warning' | 'info';
     message: string;
   }>;
+  /** @deprecated Use upstreamRisks and downstreamRisks instead */
   pathInsights?: Array<{
     severity: 'error' | 'warning' | 'info';
     message: string;
   }>;
+  upstreamRisks?: RiskSummary;
+  downstreamRisks?: RiskSummary;
 }
 
 export interface FileCentralityNotification {
@@ -941,25 +957,67 @@ export class ContextView implements vscode.WebviewViewProvider {
         "</div>";
     }
 
-    function renderPathInsights(impact) {
-      // Path insights are findings from callers in the call path
-      const pathInsights = impact.pathInsights || [];
-      
-      if (pathInsights.length === 0) {
+    function renderRiskSummary(risks, label, icon) {
+      if (!risks || risks.total_findings === 0) {
         return '';
       }
 
-      const items = pathInsights.map(i => {
-        const sev = i.severity || 'info';
-        return "<div class='signal " + esc(sev) + "'>" +
-          "<span class='signal-content'>" + esc(i.message) + "</span>" +
+      const categories = (risks.categories || []).map(cat => {
+        const sev = cat.severity === 'critical' || cat.severity === 'high' ? 'error' 
+          : cat.severity === 'medium' ? 'warning' : 'info';
+        const examples = cat.example_locations.slice(0, 2).map(loc => {
+          // Extract just the filename from the path
+          const parts = loc.split('/');
+          return parts[parts.length - 1];
+        }).join(', ');
+        return "<div class='signal " + sev + "'>" +
+          "<span class='signal-content'>" + 
+            "<strong>" + esc(cat.category) + "</strong> (" + cat.count + ")" +
+            (examples ? "<br><small style='opacity: 0.7'>" + esc(examples) + "</small>" : "") +
+          "</span>" +
           "</div>";
       }).join('');
 
       return "<div style='margin-top: 8px;'>" +
-        "<div class='section-label'>ON THIS PATH</div>" +
-        "<div class='signals-list'>" + items + "</div>" +
+        "<div class='section-label'>" + icon + " " + esc(label) + " (" + risks.total_findings + ")</div>" +
+        "<div class='signals-list'>" + categories + "</div>" +
         "</div>";
+    }
+
+    function renderPathInsights(impact) {
+      // New format: upstream and downstream risk summaries
+      const upstreamHtml = renderRiskSummary(
+        impact.upstreamRisks, 
+        "UPSTREAM RISKS", 
+        "↑"
+      );
+      const downstreamHtml = renderRiskSummary(
+        impact.downstreamRisks, 
+        "DOWNSTREAM RISKS", 
+        "↓"
+      );
+
+      // Fallback to legacy pathInsights if new format not available
+      if (!upstreamHtml && !downstreamHtml) {
+        const pathInsights = impact.pathInsights || [];
+        if (pathInsights.length === 0) {
+          return '';
+        }
+
+        const items = pathInsights.map(i => {
+          const sev = i.severity || 'info';
+          return "<div class='signal " + esc(sev) + "'>" +
+            "<span class='signal-content'>" + esc(i.message) + "</span>" +
+            "</div>";
+        }).join('');
+
+        return "<div style='margin-top: 8px;'>" +
+          "<div class='section-label'>ON THIS PATH</div>" +
+          "<div class='signals-list'>" + items + "</div>" +
+          "</div>";
+      }
+
+      return upstreamHtml + downstreamHtml;
     }
 
     // Event delegation for all clickable elements (CSP-safe, no inline onclick)

@@ -29,6 +29,23 @@ let client: LanguageClient;
 let statusBarItem: vscode.StatusBarItem;
 let contextView: ContextView | null = null;
 
+// Cache key for cursor-following to avoid redundant API calls
+// Cleared on analysis complete to force refresh with new data
+let lastFollowedKey: string | null = null;
+
+interface RiskCategory {
+  category: string;
+  count: number;
+  severity: string;
+  example_locations: string[];
+}
+
+interface RiskSummary {
+  total_findings: number;
+  total_affected_functions: number;
+  categories: RiskCategory[];
+}
+
 interface FunctionImpactData {
   name: string;
   callers: Array<{
@@ -57,10 +74,13 @@ interface FunctionImpactData {
     severity: 'error' | 'warning' | 'info';
     message: string;
   }>;
+  /** @deprecated Use upstreamRisks and downstreamRisks instead */
   pathInsights?: Array<{
     severity: 'error' | 'warning' | 'info';
     message: string;
   }>;
+  upstreamRisks?: RiskSummary;
+  downstreamRisks?: RiskSummary;
 }
 
 async function getFunctionImpact(
@@ -612,15 +632,20 @@ async function refreshFileContext(uri: string): Promise<void> {
  * This is more expensive than refreshFileContext but updates findings
  */
 async function refreshFileAnalysis(uri: string): Promise<void> {
+  console.log('[Unfault] refreshFileAnalysis called for:', uri, 'client:', !!client, 'serverState:', serverState);
   if (!client || serverState !== 'running') {
+    console.log('[Unfault] Skipping refreshFileAnalysis - client not ready');
     return;
   }
 
   try {
-    console.log('[Unfault] Refreshing file analysis:', uri);
+    console.log('[Unfault] Calling refreshFile LSP command');
     const result = await refreshFile(client, uri);
+    console.log('[Unfault] refreshFile result:', result);
     if (result) {
-      console.log('[Unfault] File refresh complete, findings:', result.finding_count);
+      console.log('[Unfault] File refresh complete, success:', result.success, 'findings:', result.finding_count);
+    } else {
+      console.log('[Unfault] File refresh returned null');
     }
     // Note: The analysisComplete notification will trigger sidebar refresh
   } catch (e) {
@@ -687,24 +712,61 @@ function registerClientHandlers(lspClient: LanguageClient) {
   // Listen for analysis complete to refresh code lenses and sidebar
   lspClient.onNotification('unfault/analysisComplete', async (params: { uri: string; finding_count: number }) => {
     console.log('[Unfault] Analysis complete for', params.uri, 'findings:', params.finding_count);
-    
+
     // Refresh code lenses to show updated finding counts
     codeLensProviderInstance?.refresh();
-    
-    // Refresh sidebar if viewing the same file
-    const editor = vscode.window.activeTextEditor;
-    if (editor && contextView && editor.document.uri.toString() === params.uri) {
-      const position = editor.selection.active;
-      const functionName = await getFunctionNameAtPosition(editor.document, position);
-      if (functionName) {
-        const impactData = await getFunctionImpact(lspClient, {
-          uri: params.uri,
-          functionName,
-          position: { line: position.line, character: position.character }
-        });
-        contextView.setActiveImpact(impactData);
-      }
+
+    // ALWAYS clear the cursor-following cache on ANY analysis complete.
+    // This ensures consistency: when f1.py is saved, the sidebar for f3.py
+    // (which may show path_findings from f1) will be refreshed.
+    if (lastFollowedKey) {
+      console.log('[Unfault] Clearing lastFollowedKey (was:', lastFollowedKey, ')');
+      lastFollowedKey = null;
     }
+
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !contextView) {
+      console.log('[Unfault] No active editor or contextView');
+      return;
+    }
+
+    // Always clear pinned state on analysis completion: pinned impact represents
+    // a snapshot that becomes stale after edits.
+    contextView.clearPinnedImpact();
+
+    // finding_count=0 indicates the LSP server invalidated the cache due to document change.
+    // Clear the sidebar immediately to avoid showing stale findings.
+    // Only do this if it's for the SAME file being edited.
+    if (params.finding_count === 0 && editor.document.uri.toString() === params.uri) {
+      console.log('[Unfault] finding_count=0 for current file, clearing sidebar');
+      contextView.setActiveImpact(null);
+      return;
+    }
+
+    // Re-fetch function impact for the CURRENT editor (not the saved file).
+    // This ensures path_findings are always fresh after any file is saved.
+    const currentUri = editor.document.uri.toString();
+    const position = editor.selection.active;
+    console.log('[Unfault] Getting function at position', position.line, position.character, 'in', currentUri);
+    const functionName = await getFunctionNameAtPosition(editor.document, position);
+    console.log('[Unfault] Function name:', functionName);
+
+    // If we can't identify a function at the cursor, clear the active impact to
+    // avoid leaving stale findings on screen.
+    if (!functionName) {
+      console.log('[Unfault] No function name, clearing sidebar');
+      contextView.setActiveImpact(null);
+      return;
+    }
+
+    console.log('[Unfault] Fetching impact for', functionName);
+    const impactData = await getFunctionImpact(lspClient, {
+      uri: currentUri,
+      functionName,
+      position: { line: position.line, character: position.character }
+    });
+    console.log('[Unfault] Got impact data, updating sidebar');
+    contextView.setActiveImpact(impactData);
   });
 }
 
@@ -818,32 +880,19 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Follow cursor and update the context sidebar
   let followCursorTimer: NodeJS.Timeout | null = null;
-  let lastFollowedKey: string | null = null;
 
-  // Debounced refresh for document changes (e.g., after quick fix applied)
-  let documentChangeTimer: NodeJS.Timeout | null = null;
-
-  // Refresh file analysis (including findings) after document changes
-  // This ensures the sidebar updates after quick fixes are applied
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeTextDocument((e) => {
-      // Only refresh for supported languages
-      const supportedLanguages = ['python', 'go', 'rust', 'typescript', 'javascript'];
-      if (!supportedLanguages.includes(e.document.languageId)) {
-        return;
-      }
-
-      // Debounce to avoid excessive requests during typing
-      // Using longer delay (1.5s) since this triggers full re-analysis
-      if (documentChangeTimer) {
-        clearTimeout(documentChangeTimer);
-      }
-
-      documentChangeTimer = setTimeout(() => {
-        refreshFileAnalysis(e.document.uri.toString());
-      }, 1500); // 1.5s debounce for full analysis
-    })
-  );
+  // NOTE: We intentionally do NOT refresh analysis on document change.
+  // Analysis reads files from disk, not from VSCode's in-memory buffer.
+  // Refreshing on change would re-analyze the OLD disk content, causing
+  // findings to flip back to stale state.
+  //
+  // Instead, analysis only runs on:
+  // - did_open (file opened)
+  // - did_save (file saved to disk)
+  //
+  // The sidebar is cleared on document change via the LSP's did_change handler,
+  // which sends analysisComplete with finding_count=0. This provides immediate
+  // feedback that findings are stale until the file is saved.
 
   // Clear lastFollowedKey on save to force re-fetch when analysis completes
   context.subscriptions.push(
@@ -958,8 +1007,12 @@ export function activate(context: vscode.ExtensionContext) {
       await vscode.commands.executeCommand('workbench.view.explorer');
       await vscode.commands.executeCommand('unfault.contextView.focus');
 
+      // IMPORTANT:
+      // Do not pin by default. Pinning makes the sidebar intentionally "sticky",
+      // which causes stale findings to persist across edits/re-analysis.
+      // Users can still pin explicitly via the sidebar button.
       if (impactData) {
-        contextView?.setPinnedImpact(impactData);
+        contextView?.setActiveImpact(impactData);
       }
     }
   );
