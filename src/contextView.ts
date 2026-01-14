@@ -592,7 +592,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       margin-top: 6px;
       padding-top: 6px;
       border-top: 1px solid var(--vscode-widget-border);
-      font-size: 10px;
+      font-size: 11px;
     }
 
     .detail-title {
