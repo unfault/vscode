@@ -33,19 +33,6 @@ let contextView: ContextView | null = null;
 // Cleared on analysis complete to force refresh with new data
 let lastFollowedKey: string | null = null;
 
-interface RiskCategory {
-  category: string;
-  count: number;
-  severity: string;
-  example_locations: string[];
-}
-
-interface RiskSummary {
-  total_findings: number;
-  total_affected_functions: number;
-  categories: RiskCategory[];
-}
-
 interface FunctionImpactData {
   name: string;
   callers: Array<{
@@ -74,13 +61,21 @@ interface FunctionImpactData {
     severity: 'error' | 'warning' | 'info';
     message: string;
   }>;
-  /** @deprecated Use upstreamRisks and downstreamRisks instead */
+  /** @deprecated Use upstreamInsights and downstreamInsights instead */
   pathInsights?: Array<{
     severity: 'error' | 'warning' | 'info';
     message: string;
   }>;
-  upstreamRisks?: RiskSummary;
-  downstreamRisks?: RiskSummary;
+  /** Human-friendly insights about issues in upstream callers */
+  upstreamInsights?: Array<{
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+  }>;
+  /** Human-friendly insights about issues in downstream callees */
+  downstreamInsights?: Array<{
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+  }>;
 }
 
 async function getFunctionImpact(
