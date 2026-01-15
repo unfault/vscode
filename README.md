@@ -1,145 +1,50 @@
-# Unfault VS Code Extension
+# Unfault for VS Code
 
-Cognitive context for code you ship.
+Cognitive context for the code you ship.
 
-Unfault keeps runtime context close by: call paths, dependents, entry points (routes, jobs), and the safeguards (or missing safeguards) in the chain. The goal is to reduce surprises without adding noise.
+Unfault surfaces call paths, entry points, and gaps in safeguards — right where you're working. The goal is fewer surprises, not more noise.
 
-## What You Get
+## What It Does
 
-- **Impact at a glance**: see where a function is used and what depends on it
-- **Routes and entry points**: understand which endpoints and background jobs a change may affect
-- **Safeguards and gaps**: spot missing logging, retries, timeouts, etc. in the call chain
-- **Calm defaults**: diagnostics are opt-in; default is hovers + sidebar context
-- **Privacy-first architecture**: parsing happens locally; only derived IR is sent for analysis
+- **Context sidebar** — see callers, routes, and SLOs linked to the function under your cursor
+- **CodeLens hints** — compact summaries above functions showing usage and reachability
+- **Findings** — optional diagnostics for missing timeouts, naive datetime usage, and similar patterns
 
 ## How It Works
 
-When you open a supported file:
+1. The CLI parses your code locally
+2. A semantic graph (imports, calls, entry points) is built
+3. Analysis runs against production-readiness signals
+4. Context appears in the sidebar and as code lenses
 
-1. **Local parsing**: your code is parsed locally (via the Unfault CLI)
-2. **Semantic graph**: imports, symbols, calls, and framework entry points are captured
-3. **Analysis**: the graph is evaluated for production-readiness signals
-4. **Display**: context shows up as hovers, code lenses, and the context sidebar
-
-## Function Impact (Hover)
-
-Hover a function name to see a compact summary:
-
-```
-process_payment() - high impact
-
-Used by:
-  • /api/checkout (POST)
-  • /api/retry-payment (POST)
-  • BackgroundTask: process_failed_payments
-
-Safeguards observed:
-  • structured logging: missing
-  • retries: present (tenacity)
-  • circuit breaker: missing
-
-3 files depend on this function
-```
-
-The goal is not to alarm you. It keeps relevant context nearby.
-
-## File Centrality
-
-The status bar can surface how "wide" a file's blast radius is:
-
-- **Hub file**: many importers / dependents
-- **Important file**: moderate fan-in
-- **Leaf file**: small local surface area
+Your source stays on your machine. Only the derived graph is sent for analysis.
 
 ## Requirements
 
-1. **Unfault CLI**
-
-   ```bash
-   cargo install unfault
-   ```
-
-2. **Authentication**
-
-   ```bash
-   unfault login
-   ```
-
-## Installation
-
-1. Install the extension from the VS Code Marketplace
-2. Ensure `unfault` is in your `PATH` (or set `unfault.executablePath`)
-3. Open a supported file; the extension will start the Unfault language server
-
-## Configuration
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `unfault.executablePath` | Path to the unfault CLI executable | `unfault` |
-| `unfault.verbose` | Verbose logging for the LSP server | `false` |
-| `unfault.trace.server` | Trace LSP communication for debugging | `off` |
-| `unfault.diagnostics.enabled` | Show insights as squiggles (opt-in) | `false` |
+Install and authenticate the CLI: [unfault.dev/docs/installation](https://unfault.dev/docs/installation)
 
 ## Supported Languages
 
-- Python (.py)
-- Go (.go)
-- Rust (.rs)
-- TypeScript (.ts, .tsx)
-- JavaScript (.js, .jsx)
+Python · Go · Rust · TypeScript · JavaScript
 
-## Commands
+## Settings
 
-- `Unfault: Welcome & Setup`
-- `Unfault: Restart Unfault LSP Server`
-- `Unfault: Show Unfault Menu`
-- `Unfault: Show Unfault Output`
-- `Unfault: Open Unfault Settings`
-- `Unfault: Show Files That Depend on This File`
-- `Unfault: Open Context Sidebar`
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `unfault.executablePath` | Path to the CLI executable | `unfault` |
+| `unfault.verbose` | Verbose LSP logging | `false` |
+| `unfault.trace.server` | Trace LSP communication (`off`, `messages`, `verbose`) | `off` |
+| `unfault.codeLens.enabled` | Show code lens hints above functions | `true` |
+| `unfault.codeLens.clickToOpen` | Click code lens to open sidebar | `true` |
+| `unfault.diagnostics.enabled` | Show findings as squiggles | `false` |
+| `unfault.diagnostics.minSeverity` | Minimum severity (`critical`, `high`, `medium`, `low`) | `high` |
 
 ## Troubleshooting
 
-### `unfault: command not found`
+**CLI not found** — add `unfault` to your PATH or set `unfault.executablePath`
 
-The CLI is not in your `PATH`.
-
-- Add the directory containing `unfault` to `PATH`, or
-- Set `unfault.executablePath` in VS Code settings
-
-### No hovers or context
-
-- Check Output: View -> Output -> "Unfault"
-- Confirm login: `unfault login`
-- Restart: "Unfault: Restart Unfault LSP Server"
-- Confirm connectivity to `app.unfault.dev`
+**No context showing** — check Output → "Unfault LSP" for errors, confirm login succeeded
 
 ## Privacy
 
-Your source code does not leave your machine. The CLI parses locally and sends only a derived semantic representation (imports, symbols, call relationships) to the Unfault API. See https://unfault.dev/privacy
-
-## Production-readiness
-
-Production-readiness here means: fewer unknowns during review, debugging, incident response, and on-call.
-
-- Understand entry points and downstream effects before you edit
-- See missing safeguards that make failures harder to diagnose or contain
-- Keep context close, without turning the editor into an alert feed
-
-## Risks
-
-- Any analysis can be incomplete if the codebase is partially indexed, generated, or highly dynamic
-- Initial analysis may be slower on very large repos (subsequent queries use cached context)
-
-## Threats
-
-- Misinterpreting a signal as certainty (treat this as context, not truth)
-- Overfitting to "green checks" instead of operational requirements
-
-## Ship
-
-Use the insights as a steadying aid:
-
-- Confirm impact radius
-- Add the safeguard that makes failures legible
-- Ship deliberately
+Source code never leaves your machine. See [unfault.dev/privacy](https://unfault.dev/privacy)
