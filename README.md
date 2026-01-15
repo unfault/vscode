@@ -1,6 +1,24 @@
-# Unfault for VS Code
+<h2 align="center">
+  <br>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/unfault/vscode/main/images/icon.png">
+    <img alt="Unfault" src="https://raw.githubusercontent.com/unfault/vscode/main/images/icon.png" width="128">
+  </picture>
+</h2>
 
-Cognitive context for the code you ship.
+<h4 align="center">Unfault for VS Code — Cognitive context for the code you ship</h4>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=unfault.unfault"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/unfault.unfault"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=unfault.unfault"><img alt="Installs" src="https://img.shields.io/visual-studio-marketplace/i/unfault.unfault"></a>
+</p>
+
+<p align="center">
+  <a href="https://unfault.dev/docs/installation">Installation</a> •
+  <a href="https://unfault.dev/docs">Documentation</a>
+</p>
+
+---
 
 Unfault surfaces call paths, entry points, and gaps in safeguards — right where you're working. The goal is fewer surprises, not more noise.
 
