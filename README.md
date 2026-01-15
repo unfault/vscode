@@ -1,87 +1,84 @@
 # Unfault VS Code Extension
 
-**Cognitive context for your code — right where you write it.**
+Cognitive context for code you ship.
 
-Unfault helps you understand the runtime impact of your code while you're writing it. Hover over a function to see where it's used, what routes depend on it, and whether safeguards like logging or retries are in place.
+Unfault keeps runtime context close by: call paths, dependents, entry points (routes, jobs), and the safeguards (or missing safeguards) in the chain. The goal is to reduce surprises without adding noise.
 
-## Features
+## What You Get
 
-- **Function Impact Hovers**: Hover over any function to see its callers, the routes it affects, and what safeguards exist in the call chain
-- **File Centrality**: See how important a file is in the status bar — hub files that many others depend on are highlighted
-- **Dependency Awareness**: Get notified when you open a file that many other files depend on
-- **Real-time Insights**: Diagnostics appear inline as you code, showing where context might be missing
-- **Quick Fixes**: Apply suggested improvements with a single click
-- **Privacy First**: Code is parsed locally by the CLI; only analyzed IR is sent to the Unfault API
+- **Impact at a glance**: see where a function is used and what depends on it
+- **Routes and entry points**: understand which endpoints and background jobs a change may affect
+- **Safeguards and gaps**: spot missing logging, retries, timeouts, etc. in the call chain
+- **Calm defaults**: diagnostics are opt-in; default is hovers + sidebar context
+- **Privacy-first architecture**: parsing happens locally; only derived IR is sent for analysis
 
 ## How It Works
 
-When you open a supported file, Unfault builds a semantic graph of your codebase:
+When you open a supported file:
 
-1. **Local Parsing**: Your code is parsed by the CLI on your machine
-2. **Graph Construction**: Imports, function calls, routes, and middleware chains are captured
-3. **Context Analysis**: The graph is analyzed for patterns and relationships
-4. **Inline Display**: Context appears as hovers, diagnostics, and status bar info
+1. **Local parsing**: your code is parsed locally (via the Unfault CLI)
+2. **Semantic graph**: imports, symbols, calls, and framework entry points are captured
+3. **Analysis**: the graph is evaluated for production-readiness signals
+4. **Display**: context shows up as hovers, code lenses, and the context sidebar
 
-### Function Impact Hovers
+## Function Impact (Hover)
 
-Hover over a function name to see:
+Hover a function name to see a compact summary:
 
 ```
-process_payment() — High Impact Function
+process_payment() - high impact
 
 Used by:
   • /api/checkout (POST)
   • /api/retry-payment (POST)
   • BackgroundTask: process_failed_payments
 
-Safeguards in call chain:
-  ⚠ No structured logging
-  ✓ Has retry logic (tenacity)
-  ⚠ No circuit breaker
+Safeguards observed:
+  • structured logging: missing
+  • retries: present (tenacity)
+  • circuit breaker: missing
 
 3 files depend on this function
 ```
 
-### File Centrality
+The goal is not to alarm you. It keeps relevant context nearby.
 
-The status bar shows:
+## File Centrality
 
-- **Hub file (12 importers)** — This file is central; changes have wide impact
-- **Important file (7 importers)** — Moderate impact radius
-- **Leaf file** — Safe to modify; few dependencies
+The status bar can surface how "wide" a file's blast radius is:
 
-### Dependency Notifications
-
-When you open a file that other files depend on, you'll see a notification:
-
-> "5 files depend on auth/middleware.py. Show All Dependents?"
-
-Click to see and navigate to all dependent files.
+- **Hub file**: many importers / dependents
+- **Important file**: moderate fan-in
+- **Leaf file**: small local surface area
 
 ## Requirements
 
-1. **Unfault CLI**: Install the CLI:
+1. **Unfault CLI**
+
    ```bash
    cargo install unfault
    ```
 
-2. **Authentication**: Login to enable analysis:
+2. **Authentication**
+
    ```bash
    unfault login
    ```
 
 ## Installation
 
-1. Install this extension from the VS Code Marketplace
-2. Ensure `unfault` is in your PATH, or configure the path in settings
-3. Open a supported file — the extension starts automatically
+1. Install the extension from the VS Code Marketplace
+2. Ensure `unfault` is in your `PATH` (or set `unfault.executablePath`)
+3. Open a supported file; the extension will start the Unfault language server
 
 ## Configuration
 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `unfault.executablePath` | Path to the unfault CLI executable | `unfault` |
+| `unfault.verbose` | Verbose logging for the LSP server | `false` |
 | `unfault.trace.server` | Trace LSP communication for debugging | `off` |
+| `unfault.diagnostics.enabled` | Show insights as squiggles (opt-in) | `false` |
 
 ## Supported Languages
 
@@ -93,60 +90,56 @@ Click to see and navigate to all dependent files.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `Unfault: Restart LSP Server` | Restart the language server |
-| `Unfault: Show File Dependents` | Show files that depend on the current file |
-| `Unfault: Show Output` | View LSP server logs |
-
-Access commands via the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) or click the Unfault icon in the status bar.
-
-## Understanding the Insights
-
-Unfault doesn't tell you what's "wrong" — it tells you what's *there* (or not there):
-
-| Icon | Meaning |
-|------|---------|
-| ✓ | Safeguard is present |
-| ⚠ | Safeguard is missing — you may want to add it |
-| 🔗 | Connected to routes or external systems |
-| 📊 | Impact metric (callers, dependents) |
-
-This is cognitive support, not a warning system. The goal is to help you understand your code's runtime behavior so you can make informed decisions.
-
-## Status Bar States
-
-| Display | Meaning |
-|---------|---------|
-| `$(unfault-logo) ✓` | No insights for this file |
-| `$(unfault-logo) 3` | 3 insights to review |
-| `$(unfault-logo) $(hub)` | Hub file with many dependents |
-| `$(unfault-logo) $(loading)` | Server starting |
-| `$(unfault-logo) ⚠` | Server error — click to restart |
+- `Unfault: Welcome & Setup`
+- `Unfault: Restart Unfault LSP Server`
+- `Unfault: Show Unfault Menu`
+- `Unfault: Show Unfault Output`
+- `Unfault: Open Unfault Settings`
+- `Unfault: Show Files That Depend on This File`
+- `Unfault: Open Context Sidebar`
 
 ## Troubleshooting
 
-### "unfault: command not found"
+### `unfault: command not found`
 
-The CLI is not in your PATH. Either:
-- Add the directory containing `unfault` to your PATH
-- Configure `unfault.executablePath` in VS Code settings
+The CLI is not in your `PATH`.
 
-### No hovers or diagnostics appearing
+- Add the directory containing `unfault` to `PATH`, or
+- Set `unfault.executablePath` in VS Code settings
 
-1. Check the Output panel (View > Output) and select "Unfault LSP"
-2. Make sure you're logged in: `unfault login`
-3. Try restarting the server: Command Palette > "Unfault: Restart LSP Server"
-4. Ensure you have network connectivity to app.unfault.dev
+### No hovers or context
 
-### Hovers are slow
-
-The first hover may take a moment as the graph is built. Subsequent hovers use the cached graph and should be instant.
+- Check Output: View -> Output -> "Unfault"
+- Confirm login: `unfault login`
+- Restart: "Unfault: Restart Unfault LSP Server"
+- Confirm connectivity to `app.unfault.dev`
 
 ## Privacy
 
-Your source code never leaves your machine. The CLI parses your code locally and sends only a semantic representation (imports, function signatures, call relationships) to the Unfault API. See our [privacy policy](https://unfault.dev/privacy) for details.
+Your source code does not leave your machine. The CLI parses locally and sends only a derived semantic representation (imports, symbols, call relationships) to the Unfault API. See https://unfault.dev/privacy
 
-## License
+## Production-readiness
 
-MIT
+Production-readiness here means: fewer unknowns during review, debugging, incident response, and on-call.
+
+- Understand entry points and downstream effects before you edit
+- See missing safeguards that make failures harder to diagnose or contain
+- Keep context close, without turning the editor into an alert feed
+
+## Risks
+
+- Any analysis can be incomplete if the codebase is partially indexed, generated, or highly dynamic
+- Initial analysis may be slower on very large repos (subsequent queries use cached context)
+
+## Threats
+
+- Misinterpreting a signal as certainty (treat this as context, not truth)
+- Overfitting to "green checks" instead of operational requirements
+
+## Ship
+
+Use the insights as a steadying aid:
+
+- Confirm impact radius
+- Add the safeguard that makes failures legible
+- Ship deliberately

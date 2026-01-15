@@ -714,9 +714,9 @@ export class ContextView implements vscode.WebviewViewProvider {
         let statusLine = '';
         if (budget !== undefined) {
           if (isLow) {
-            statusLine = budget.toFixed(1) + '% error budget remaining — getting tight';
+            statusLine = budget.toFixed(1) + '% error budget remaining - getting tight';
           } else if (budget > 80) {
-            statusLine = 'Healthy — ' + budget.toFixed(0) + '% error budget available';
+            statusLine = 'Healthy - ' + budget.toFixed(0) + '% error budget available';
           } else {
             statusLine = budget.toFixed(0) + '% error budget remaining';
           }

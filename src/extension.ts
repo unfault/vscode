@@ -331,10 +331,10 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
         console.log('[Unfault] Code lens resolved with title:', codeLens.command.title);
       } else {
         console.log('[Unfault] No impact data received');
-         codeLens.command = {
-           title: 'Unfault: analyzing…',
-           command: ''
-         };
+          codeLens.command = {
+            title: 'Unfault: analyzing...',
+            command: ''
+          };
       }
     } catch (error) {
       console.error('[Unfault] Error resolving code lens:', error);

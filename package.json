@@ -1,8 +1,8 @@
 {
   "name": "unfault",
   "displayName": "Unfault",
-  "description": "Production-readiness linting for your code - detect stability, performance, and reliability issues before they reach production",
-  "version": "0.9.1",
+  "description": "Production readiness context in VS Code. See impact, risks, and safeguards as you code",
+  "version": "0.9.2",
   "publisher": "unfault",
   "homepage": "https://unfault.dev",
   "repository": {
@@ -22,6 +22,10 @@
     "Programming Languages"
   ],
   "keywords": [
+    "cognitive",
+    "context",
+    "impact",
+    "risk",
     "linter",
     "production-readiness",
     "stability",

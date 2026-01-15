@@ -354,7 +354,7 @@ export class WelcomePanel {
         <img class="logo" src="${logoUri}" alt="Unfault Logo">
         Unfault
     </h1>
-    <p class="tagline">A cognitive context engine — Understand what your code means and does, while you're writing it</p>
+    <p class="tagline">A cognitive context engine. Understand what your code means and does while you're writing it.</p>
 
     <div class="status-card">
         ${authStatus.isAuthenticated ? `
@@ -432,7 +432,7 @@ export class WelcomePanel {
             </div>
             <div class="feature">
                 <h3>📊 File Centrality</h3>
-                <p>Status bar shows how central a file is — hub files that many others depend on are highlighted.</p>
+                <p>Status bar shows how central a file is. Hub files that many others depend on are highlighted.</p>
             </div>
             <div class="feature">
                 <h3>🔔 Dependency Awareness</h3>
@@ -448,7 +448,7 @@ export class WelcomePanel {
             </div>
             <div class="feature">
                 <h3>🔒 Privacy First</h3>
-                <p>Code is parsed locally — only semantic structure is sent to the API, never your source code.</p>
+                <p>Code is parsed locally. Only semantic structure is sent to the API, never your source code.</p>
             </div>
         </div>
     </div>
