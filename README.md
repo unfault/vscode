@@ -6,7 +6,7 @@
   </picture>
 </h2>
 
-<h4 align="center">Unfault for VS Code — Cognitive context for the code you ship</h4>
+<h4 align="center">Unfault for VS Code — Cognitive context for the code you work on everyday</h4>
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=unfault.unfault"><img alt="VS Code Marketplace" src="https://img.shields.io/visual-studio-marketplace/v/unfault.unfault"></a>
