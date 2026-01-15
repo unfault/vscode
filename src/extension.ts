@@ -324,7 +324,7 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
          }
 
          codeLens.command = {
-           title: parts.length > 0 ? `Unfault: ${parts.join(' · ')}` : 'Unfault: context',
+           title: parts.length > 0 ? `uf: ${parts.join(' · ')}` : 'uf: context',
            command: clickToOpen ? 'unfault.openContext' : '',
            arguments: [impactData]
          };
@@ -332,14 +332,14 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
       } else {
         console.log('[Unfault] No impact data received');
           codeLens.command = {
-            title: 'Unfault: analyzing...',
+            title: 'uf: analyzing...',
             command: ''
           };
       }
     } catch (error) {
       console.error('[Unfault] Error resolving code lens:', error);
        codeLens.command = {
-         title: 'Unfault: context',
+         title: 'uf: context',
          command: ''
        };
     }
