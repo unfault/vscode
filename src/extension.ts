@@ -323,8 +323,13 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
            parts.push('worth a look');
          }
 
+         // Hide CodeLens if there's nothing interesting to show
+         if (parts.length === 0) {
+           return null as unknown as vscode.CodeLens;
+         }
+
          codeLens.command = {
-           title: parts.length > 0 ? `uf: ${parts.join(' · ')}` : 'uf: context',
+           title: `uf: ${parts.join(' · ')}`,
            command: clickToOpen ? 'unfault.openContext' : '',
            arguments: [impactData]
          };
@@ -338,10 +343,8 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
       }
     } catch (error) {
       console.error('[Unfault] Error resolving code lens:', error);
-       codeLens.command = {
-         title: 'uf: context',
-         command: ''
-       };
+      // Hide CodeLens on error
+      return null as unknown as vscode.CodeLens;
     }
 
     return codeLens;
