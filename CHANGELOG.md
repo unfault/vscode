@@ -5,6 +5,26 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.4] - 2026-01-20
+
+### Changed
+- Bumped extension version to 0.9.4.
+
+## [0.9.3] - 2026-01-15
+
+### Fixed
+- Bundled the extension with esbuild to resolve dependency issues.
+- Hid CodeLens for functions with no available context.
+
+### Changed
+- Switched CodeLens prefix from "Unfault:" to "uf:".
+- Updated README copy and layout.
+
+## [0.9.2] - 2026-01-15
+
+### Changed
+- Updated README voice and metadata.
+
 ## [0.9.1] - 2026-01-14
 
 ### Added
@@ -18,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added softer phrasing for missing SLO info.
 - Added refresh findings after document changes via single-file analysis.
 - Added refresh on analysis complete notification.
+- **File Dependencies**: New command `Unfault: Show Files That Depend on This File` to discover reverse dependencies.
+- **Dependency Notifications**: When a file has dependents, shows an information message with the count.
+- **Quick Pick Browser**: Navigate to dependent files from the quick pick list, showing both direct and transitive dependents.
+- Status bar menu now includes "Show File Dependents" option.
 
 ### Changed
 - Softened tone to match calm, helpful voice across sidebar UI.
@@ -33,13 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed sidebar use event delegation for button clicks (CSP-safe).
 - Fixed register and render context view properly after webview loads.
 - Sidebar sections reordered and call path tree improved.
-
-### Added
-
-- **File Dependencies**: New command `Unfault: Show Files That Depend on This File` to discover reverse dependencies
-- **Dependency Notifications**: When a file has dependents, shows an information message with the count
-- **Quick Pick Browser**: Navigate to dependent files directly from the quick pick list, showing both direct and transitive dependents
-- Status bar menu now includes "Show File Dependents" option
 
 ## [0.8.0] - 2025-12-22
 
@@ -164,5 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `unfault.profile` - Profile selection (auto or language-specific)
 - **LSP Profiles**: Uses language-specific LSP profiles to avoid false positives in single-file analysis
 
+[0.9.4]: https://github.com/unfault/vscode/compare/v0.9.3...v0.9.4
+[0.9.3]: https://github.com/unfault/vscode/compare/v0.9.2...v0.9.3
+[0.9.2]: https://github.com/unfault/vscode/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/unfault/vscode/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/unfault/vscode/releases/tag/v0.9.0
