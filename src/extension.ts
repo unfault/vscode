@@ -14,7 +14,6 @@
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -427,82 +426,6 @@ function getUnfaultPath(): string {
   return config.get('executablePath', 'unfault');
 }
 
-function getFaultPath(): string {
-  const config = vscode.workspace.getConfiguration('unfault');
-  return config.get('fault.executablePath', 'fault');
-}
-
-function getFaultBaseUrl(): string {
-  const config = vscode.workspace.getConfiguration('unfault');
-  return config.get('fault.baseUrl', 'http://127.0.0.1:8000');
-}
-
-function joinUrl(baseUrl: string, path: string): string {
-  const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-  const normalizedPath = path.replace(/^\//, '');
-  return new URL(normalizedPath, base).toString();
-}
-
-function sanitizeFilenameComponent(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '')
-    .slice(0, 80);
-}
-
-type FaultTemplate = {
-  id: 'latency' | 'httperror_503' | 'blackhole';
-  label: string;
-  description: string;
-};
-
-function renderFaultScenarioYaml(params: {
-  title: string;
-  description: string;
-  method: string;
-  url: string;
-  upstream: string;
-  templateId: FaultTemplate['id'];
-}): string {
-  const q = (v: string) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-
-  const lines: string[] = [];
-  lines.push(`title: ${q(params.title)}`);
-  lines.push(`description: ${q(params.description)}`);
-  lines.push('items:');
-  lines.push('  - call:');
-  lines.push(`      method: ${params.method.toUpperCase()}`);
-  lines.push(`      url: ${params.url}`);
-  lines.push('    context:');
-  lines.push('      upstreams:');
-  lines.push(`        - ${params.upstream}`);
-  lines.push('      faults:');
-
-  if (params.templateId === 'latency') {
-    lines.push('        - type: latency');
-    lines.push('          side: client');
-    lines.push('          direction: ingress');
-    lines.push('          mean: 350.0');
-    lines.push('          stddev: 50.0');
-  } else if (params.templateId === 'httperror_503') {
-    lines.push('        - type: httperror');
-    lines.push('          status_code: 503');
-    lines.push('          probability: 0.05');
-    lines.push('          body: null');
-  } else if (params.templateId === 'blackhole') {
-    lines.push('        - type: blackhole');
-    lines.push('          direction: ingress');
-    lines.push('          side: server');
-  }
-
-  lines.push('      strategy: null');
-
-  return `${lines.join('\n')}\n`;
-}
-
 function getLspSettingsPayload() {
   const config = vscode.workspace.getConfiguration('unfault');
   return {
@@ -795,7 +718,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
 
   // Register the Explorer sidebar context view
-  contextView = new ContextView(context.extensionUri);
+  contextView = new ContextView(context.extensionUri, context.globalStorageUri);
   contextView.setServerState(serverState);
   contextView.setActiveEditor(vscode.window.activeTextEditor ?? null);
 
@@ -1022,190 +945,9 @@ export function activate(context: vscode.ExtensionContext) {
   const runFaultInjectionCommand = vscode.commands.registerCommand(
     'unfault.runFaultInjection',
     async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        vscode.window.showInformationMessage('Open a file to run a fault scenario.');
-        return;
-      }
-
-      if (!client || serverState !== 'running') {
-        vscode.window.showWarningMessage('Unfault is still starting. Try again once the server is running.');
-        return;
-      }
-
-      const position = editor.selection.active;
-      const functionName = await getFunctionNameAtPosition(editor.document, position);
-      if (!functionName) {
-        vscode.window.showInformationMessage('Move your cursor inside a function to run a fault scenario.');
-        return;
-      }
-
-      const impactData = await getFunctionImpact(
-        client,
-        {
-          uri: editor.document.uri.toString(),
-          functionName,
-          position: { line: position.line, character: position.character }
-        }
-      );
-
-      const templates: FaultTemplate[] = [
-        {
-          id: 'httperror_503',
-          label: 'Intermittent 503s (5%)',
-          description: 'Simulate flaky upstream errors'
-        },
-        {
-          id: 'latency',
-          label: 'Tail latency (350ms ± 50ms)',
-          description: 'Simulate slow upstream responses'
-        },
-        {
-          id: 'blackhole',
-          label: 'Blackhole',
-          description: 'Simulate a hard hang / timeout path'
-        }
-      ];
-
-      const selectedTemplate = await vscode.window.showQuickPick(
-        templates.map(t => ({ label: t.label, description: t.description, template: t })),
-        { placeHolder: 'Select a fault injection scenario to run' }
-      );
-
-      if (!selectedTemplate) {
-        return;
-      }
-
-      const route = impactData?.routes?.[0];
-      const baseUrl = getFaultBaseUrl();
-      const defaultUrl = route?.path
-        ? joinUrl(baseUrl, route.path)
-        : baseUrl;
-
-      const url = await vscode.window.showInputBox({
-        prompt: 'Scenario call URL',
-        value: defaultUrl
-      });
-
-      if (!url) {
-        return;
-      }
-
-      let defaultUpstream = '*';
-      try {
-        defaultUpstream = new URL(url).origin;
-      } catch {
-        // ignore
-      }
-
-      const upstream = await vscode.window.showInputBox({
-        prompt: 'Upstream host(s) to impact (fault context.upstreams)',
-        value: defaultUpstream
-      });
-
-      if (!upstream) {
-        return;
-      }
-
-      const titleBits: string[] = [selectedTemplate.template.label];
-      if (route?.method && route.path) {
-        titleBits.push(`${route.method.toUpperCase()} ${route.path}`);
-      }
-      const scenarioTitle = titleBits.join(' - ');
-
-      const scenarioYaml = renderFaultScenarioYaml({
-        title: scenarioTitle,
-        description: `Generated from ${editor.document.uri.fsPath}:${functionName}()` ,
-        method: (route?.method ?? 'GET').toUpperCase(),
-        url,
-        upstream,
-        templateId: selectedTemplate.template.id
-      });
-
-      const faultPath = getFaultPath();
-
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-      const storageDir = vscode.Uri.joinPath(context.globalStorageUri, 'fault');
-      await vscode.workspace.fs.createDirectory(storageDir);
-      const scenarioUri = vscode.Uri.joinPath(storageDir, 'last-scenario.yaml');
-      const reportUri = vscode.Uri.joinPath(storageDir, 'last-report.md');
-
-      await vscode.workspace.fs.writeFile(scenarioUri, Buffer.from(scenarioYaml, 'utf8'));
-
-      const execution = new vscode.ShellExecution(
-        faultPath,
-        ['scenario', 'run', '--scenario', scenarioUri.fsPath, '--report', reportUri.fsPath],
-        {
-          cwd: workspaceFolder?.uri.fsPath
-        }
-      );
-
-      const task = new vscode.Task(
-        { type: 'shell' },
-        vscode.TaskScope.Workspace,
-        `fault: ${selectedTemplate.template.label}`,
-        'unfault',
-        execution
-      );
-
-      task.presentationOptions = {
-        reveal: vscode.TaskRevealKind.Always,
-        panel: vscode.TaskPanelKind.Dedicated,
-        clear: true,
-        focus: false
-      };
-
-      const taskExecution = await vscode.tasks.executeTask(task);
-
-      const exitCode = await new Promise<number | undefined>((resolve) => {
-        const disposable = vscode.tasks.onDidEndTaskProcess((e) => {
-          if (e.execution === taskExecution) {
-            disposable.dispose();
-            resolve(e.exitCode);
-          }
-        });
-      });
-
-      const action = await vscode.window.showInformationMessage(
-        `fault scenario finished${exitCode === 0 ? '' : ` (exit ${exitCode})`}.`,
-        'Open report',
-        'Save scenario...',
-        'Copy scenario YAML'
-      );
-
-      if (action === 'Open report') {
-        const doc = await vscode.workspace.openTextDocument(reportUri);
-        await vscode.window.showTextDocument(doc, { preview: true });
-        return;
-      }
-
-      if (action === 'Copy scenario YAML') {
-        await vscode.env.clipboard.writeText(scenarioYaml);
-        vscode.window.showInformationMessage('Scenario YAML copied to clipboard.');
-        return;
-      }
-
-      if (action === 'Save scenario...') {
-        const defaultName = sanitizeFilenameComponent(scenarioTitle) || 'fault-scenario';
-        const defaultUri = workspaceFolder
-          ? vscode.Uri.joinPath(workspaceFolder.uri, 'fault-scenarios', `${defaultName}.yaml`)
-          : undefined;
-
-        const uri = await vscode.window.showSaveDialog({
-          defaultUri,
-          filters: { YAML: ['yaml', 'yml'] },
-          saveLabel: 'Save fault scenario'
-        });
-
-        if (!uri) {
-          return;
-        }
-
-        await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(uri.fsPath)));
-        await vscode.workspace.fs.writeFile(uri, Buffer.from(scenarioYaml, 'utf8'));
-        const doc = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(doc, { preview: false });
-      }
+      await vscode.commands.executeCommand('workbench.view.explorer');
+      await vscode.commands.executeCommand('unfault.contextView.focus');
+      contextView?.focusFaultInjection();
     }
   );
   context.subscriptions.push(runFaultInjectionCommand);
