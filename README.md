@@ -56,6 +56,8 @@ Python · Go · Rust · TypeScript · JavaScript
 | `unfault.codeLens.clickToOpen` | Click code lens to open sidebar | `true` |
 | `unfault.diagnostics.enabled` | Show findings as squiggles | `false` |
 | `unfault.diagnostics.minSeverity` | Minimum severity (`critical`, `high`, `medium`, `low`) | `high` |
+| `unfault.fault.executablePath` | Path to the fault CLI executable | `fault` |
+| `unfault.fault.baseUrl` | Base URL used to build runnable route URLs | `http://127.0.0.1:8000` |
 
 ## Troubleshooting
 

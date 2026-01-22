@@ -5,6 +5,12 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.5] - 2026-01-22
+
+### Added
+- New `Run fault injection for current function` command to generate + run a `fault scenario` from the current function context.
+- New settings: `unfault.fault.executablePath` and `unfault.fault.baseUrl`.
+
 ## [0.9.4] - 2026-01-20
 
 ### Changed
@@ -181,6 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `unfault.profile` - Profile selection (auto or language-specific)
 - **LSP Profiles**: Uses language-specific LSP profiles to avoid false positives in single-file analysis
 
+[0.9.5]: https://github.com/unfault/vscode/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/unfault/vscode/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/unfault/vscode/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/unfault/vscode/compare/v0.9.1...v0.9.2
