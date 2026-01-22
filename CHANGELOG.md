@@ -5,6 +5,11 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.6] - 2026-01-22
+
+### Fixed
+- Updated VS Code engine requirement to match `@types/vscode` so `vsce package` succeeds.
+
 ## [0.9.5] - 2026-01-22
 
 ### Added
@@ -187,6 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `unfault.profile` - Profile selection (auto or language-specific)
 - **LSP Profiles**: Uses language-specific LSP profiles to avoid false positives in single-file analysis
 
+[0.9.6]: https://github.com/unfault/vscode/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/unfault/vscode/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/unfault/vscode/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/unfault/vscode/compare/v0.9.2...v0.9.3
