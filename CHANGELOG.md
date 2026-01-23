@@ -5,6 +5,16 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.10] - 2026-01-22
+
+### Changed
+- The fault injection panel now runs `fault run` with TCP proxy mapping (`--proxy "9090=..."`) and opens a split terminal with a curl command targeting `http://127.0.0.1:9090/...`.
+- Removed scenario generation/report flow for now.
+
+### Added
+- New fault templates: jitter, bandwidth throttling, mobile-edge emulation, and scheduled brownout/outage windows.
+- A short intent/description for each fault template.
+
 ## [0.9.9] - 2026-01-22
 
 ### Added
@@ -210,6 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `unfault.profile` - Profile selection (auto or language-specific)
 - **LSP Profiles**: Uses language-specific LSP profiles to avoid false positives in single-file analysis
 
+[0.9.10]: https://github.com/unfault/vscode/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/unfault/vscode/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/unfault/vscode/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/unfault/vscode/compare/v0.9.6...v0.9.7

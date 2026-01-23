@@ -137,6 +137,28 @@ async function getFileDependencies(
   }
 }
 
+interface GenerateFaultScenariosResponse {
+  createdFiles: string[];
+}
+
+async function generateFaultScenarios(
+  lspClient: LanguageClient,
+  params: { uri: string; functionName: string; position: { line: number; character: number } }
+): Promise<GenerateFaultScenariosResponse | null> {
+  try {
+    const result = await lspClient.sendRequest(
+      ExecuteCommandRequest.type,
+      {
+        command: 'unfault/generateFaultScenarios',
+        arguments: [params]
+      }
+    );
+    return (result as GenerateFaultScenariosResponse | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * File centrality notification from the LSP server
  */
@@ -433,6 +455,10 @@ function getLspSettingsPayload() {
       diagnostics: {
         enabled: config.get<boolean>('diagnostics.enabled', false),
         minSeverity: config.get<string>('diagnostics.minSeverity', 'high')
+      },
+      fault: {
+        baseUrl: config.get<string>('fault.baseUrl', 'http://127.0.0.1:8000'),
+        localPort: 9090
       }
     }
   };
@@ -718,9 +744,15 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
 
   // Register the Explorer sidebar context view
-  contextView = new ContextView(context.extensionUri, context.globalStorageUri);
+  contextView = new ContextView(context.extensionUri);
   contextView.setServerState(serverState);
   contextView.setActiveEditor(vscode.window.activeTextEditor ?? null);
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeTerminalState((terminal) => {
+      contextView?.handleTerminalStateChanged(terminal);
+    })
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('unfault.contextView', contextView)
@@ -951,6 +983,53 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
   context.subscriptions.push(runFaultInjectionCommand);
+
+  const generateFaultScenariosCommand = vscode.commands.registerCommand(
+    'unfault.generateFaultScenarios',
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showInformationMessage('Open a file to generate fault scenarios.');
+        return;
+      }
+
+      if (!client || serverState !== 'running') {
+        vscode.window.showWarningMessage('Unfault is still starting. Try again once the server is running.');
+        return;
+      }
+
+      const position = editor.selection.active;
+      const functionName = await getFunctionNameAtPosition(editor.document, position);
+      if (!functionName) {
+        vscode.window.showInformationMessage('Move your cursor inside a function to generate scenarios.');
+        return;
+      }
+
+      const result = await generateFaultScenarios(client, {
+        uri: editor.document.uri.toString(),
+        functionName,
+        position: { line: position.line, character: position.character }
+      });
+
+      const created = result?.createdFiles ?? [];
+      if (created.length === 0) {
+        vscode.window.showInformationMessage('No scenarios generated (no routes found).');
+        return;
+      }
+
+      for (const filePath of created) {
+        try {
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+          await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: true });
+        } catch {
+          // ignore individual failures
+        }
+      }
+
+      vscode.window.showInformationMessage(`Generated ${created.length} scenario file${created.length === 1 ? '' : 's'}.`);
+    }
+  );
+  context.subscriptions.push(generateFaultScenariosCommand);
 
   const openContextCommand = vscode.commands.registerCommand(
     'unfault.openContext',

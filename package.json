@@ -2,7 +2,7 @@
   "name": "unfault",
   "displayName": "Unfault",
   "description": "Production readiness context in VS Code. See impact, risks, and safeguards as you code",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "publisher": "unfault",
   "homepage": "https://unfault.dev",
   "repository": {
@@ -63,6 +63,11 @@
       {
         "command": "unfault.runFaultInjection",
         "title": "Run fault injection for current function",
+        "category": "Unfault"
+      },
+      {
+        "command": "unfault.generateFaultScenarios",
+        "title": "Generate fault scenarios for current function",
         "category": "Unfault"
       },
       {
