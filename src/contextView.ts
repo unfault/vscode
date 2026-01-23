@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as childProcess from 'child_process';
 export interface FunctionImpactData {
   name: string;
   callers: Array<{
@@ -303,6 +304,16 @@ export class ContextView implements vscode.WebviewViewProvider {
       const config = vscode.workspace.getConfiguration('unfault');
       const faultPath = config.get('fault.executablePath', 'fault');
 
+      const ok = await this.ensureFaultAvailable(faultPath);
+      if (!ok) {
+        this.faultState = {
+          ...this.faultState,
+          status: 'idle'
+        };
+        this.postState();
+        return;
+      }
+
       const localPort = 9090;
       const faultArgs = this.buildFaultRunArgs({
         templateId,
@@ -387,6 +398,62 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     this.lastFaultTerminal = null;
+  }
+
+  private async ensureFaultAvailable(faultPath: string): Promise<boolean> {
+    const exists = await this.checkCommandWorks(faultPath, ['--version']);
+    if (exists) {
+      return true;
+    }
+
+    const action = await vscode.window.showErrorMessage(
+      `fault CLI not found (configured as '${faultPath}').`,
+      'Install fault',
+      'Open settings'
+    );
+
+    if (action === 'Install fault') {
+      const terminal = vscode.window.createTerminal({ name: 'unfault addon install' });
+      terminal.show(false);
+      terminal.sendText('unfault addon install fault', true);
+    }
+
+    if (action === 'Open settings') {
+      await vscode.commands.executeCommand('unfault.openSettings');
+    }
+
+    return false;
+  }
+
+  private async checkCommandWorks(command: string, args: string[]): Promise<boolean> {
+    return await new Promise((resolve) => {
+      try {
+        const child = childProcess.spawn(command, args, {
+          stdio: 'ignore'
+        });
+
+        const timeout = setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // ignore
+          }
+          resolve(false);
+        }, 2000);
+
+        child.on('error', () => {
+          clearTimeout(timeout);
+          resolve(false);
+        });
+
+        child.on('exit', (code) => {
+          clearTimeout(timeout);
+          resolve(code === 0);
+        });
+      } catch {
+        resolve(false);
+      }
+    });
   }
 
   handleTerminalStateChanged(terminal: vscode.Terminal) {
