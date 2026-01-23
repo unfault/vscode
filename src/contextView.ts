@@ -1845,6 +1845,17 @@ export class ContextView implements vscode.WebviewViewProvider {
       setFaultForm({
         templateId: templateEl.value,
       });
+
+      // Re-render immediately so the intent/description updates
+      // when the user selects a different template.
+      if (window.__lastState) {
+        render(window.__lastState);
+
+        const nextTemplateEl = document.getElementById('fault-template');
+        if (nextTemplateEl && typeof nextTemplateEl.focus === 'function') {
+          nextTemplateEl.focus();
+        }
+      }
     }
 
     document.addEventListener('input', (event) => {
