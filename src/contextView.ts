@@ -418,7 +418,7 @@ export class ContextView implements vscode.WebviewViewProvider {
     remote: string;
   }): string[] {
     const mapping = `${params.localPort}=${params.remote}`;
-    const args: string[] = ['run', '--proxy', mapping, '--duration', '2m'];
+    const args: string[] = ['run', '--disable-http-proxy', '--proxy', mapping, '--duration', '2m'];
 
     if (params.templateId === 'latency_tail_normal') {
       args.push(
