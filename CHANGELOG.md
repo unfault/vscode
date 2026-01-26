@@ -5,6 +5,23 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.12] - 2026-01-26
+
+### Changed
+
+- Documented that the fault install prompt uses `unfault addon install fault` and requires Unfault CLI v0.6.11+
+
+## [0.9.11] - 2026-01-26
+
+### Added
+
+- When running fault injection and `fault` is missing, prompt to install it via `unfault addon install fault` (requires Unfault CLI v0.6.11+)
+
+### Fixed
+
+- Fault template selection now immediately updates the intent/description
+- Run `fault` with `--disable-http-proxy` when starting the streaming proxy
+
 ## [0.9.10] - 2026-01-22
 
 ### Changed
@@ -220,6 +237,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `unfault.profile` - Profile selection (auto or language-specific)
 - **LSP Profiles**: Uses language-specific LSP profiles to avoid false positives in single-file analysis
 
+[0.9.12]: https://github.com/unfault/vscode/compare/v0.9.11...v0.9.12
+[0.9.11]: https://github.com/unfault/vscode/compare/v0.9.10...v0.9.11
 [0.9.10]: https://github.com/unfault/vscode/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/unfault/vscode/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/unfault/vscode/compare/v0.9.7...v0.9.8
