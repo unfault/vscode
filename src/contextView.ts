@@ -445,9 +445,9 @@ export class ContextView implements vscode.WebviewViewProvider {
 
     const impact = this.pinnedImpact ?? this.activeImpact;
     const route = impact?.routes?.[0];
-    const method = (route?.method ? String(route.method) : 'GET').trim().toUpperCase() || 'GET';
-    const path = route?.path || '/';
-    const appUrl = this.joinUrl(baseUrl, path);
+    const method = route?.method ? String(route.method).trim().toUpperCase() : null;
+    const path = route?.path ? String(route.path) : null;
+    const appUrl = method && path ? this.joinUrl(baseUrl, path) : null;
 
     const titleBits: string[] = [];
     titleBits.push(this.getFaultTemplateTitle(templateId));
@@ -487,8 +487,16 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       const faultCommand = `${faultPath} ${faultArgs.map(a => (a.includes(' ') ? JSON.stringify(a) : a)).join(' ')}`;
       const exportCmd = `export ${envVar}=http://127.0.0.1:${localPort}`;
-      const curlCommand = this.buildCurlCommand({ method, url: appUrl });
-      const triggerCommand = `${exportCmd}\n${curlCommand}`;
+
+      // For egress, the env var must be applied to the *application process* (restart required).
+      // We still optionally provide a curl command to trigger the code path once the app is running.
+      const curlCommand = appUrl && method ? this.buildCurlCommand({ method, url: appUrl }) : null;
+      const instructions = [
+        exportCmd,
+        '# Restart your app process so it picks up the env var.',
+        '# Then trigger the code path that performs the outbound call.',
+        curlCommand ? curlCommand : '# (No route selected in the sidebar; trigger the outbound call however you normally do.)'
+      ].join('\n');
 
       const faultTerminal = vscode.window.createTerminal({
         name: `fault (proxy)`,
@@ -497,7 +505,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       this.lastFaultTerminal = faultTerminal;
 
       const triggerTerminal = vscode.window.createTerminal({
-        name: 'curl (trigger app)',
+        name: 'egress (instructions)',
         cwd: workspaceFolder?.uri.fsPath,
         location: { parentTerminal: faultTerminal }
       });
@@ -511,7 +519,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           exitCode: null,
           startedAtIso: new Date().toISOString(),
           faultCommand,
-          curlCommand: triggerCommand
+          curlCommand: instructions
         },
         lastError: undefined
       };
@@ -520,9 +528,13 @@ export class ContextView implements vscode.WebviewViewProvider {
       faultTerminal.show(true);
       faultTerminal.sendText(faultCommand, true);
 
+      vscode.window.showInformationMessage(
+        `Egress fault proxy started. Set ${envVar}=http://127.0.0.1:${localPort} in your app's environment (restart required).`
+      );
+
       // Prefill but do not auto-run.
       triggerTerminal.show(false);
-      triggerTerminal.sendText(triggerCommand, false);
+      triggerTerminal.sendText(instructions, false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.faultState = {

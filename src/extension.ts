@@ -288,20 +288,21 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
     
     if (!client || serverState !== 'running') {
       console.log('[Unfault] Client not ready or server not running', { hasClient: !!client, serverState });
-      return codeLens;
+      // Returning a CodeLens without a command triggers VS Code errors.
+      return null;
     }
 
     const document = vscode.window.activeTextEditor?.document;
     if (!document) {
       console.log('[Unfault] No active editor document');
-      return codeLens;
+      return null;
     }
 
     try {
       const functionName = await this.getFunctionNameAtPosition(document, codeLens.range.start);
       if (!functionName) {
         console.log('[Unfault] Could not find function name at position', codeLens.range.start);
-        return codeLens;
+        return null;
       }
 
       console.log(`[Unfault] Requesting impact data for function: ${functionName}`);
@@ -339,26 +340,23 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
 
          // Hide CodeLens if there's nothing interesting to show
          if (parts.length === 0) {
-           return null as unknown as vscode.CodeLens;
+           return null;
          }
 
          codeLens.command = {
            title: `uf: ${parts.join(' · ')}`,
-           command: clickToOpen ? 'unfault.openContext' : '',
+           command: clickToOpen ? 'unfault.openContext' : 'unfault.noop',
            arguments: [impactData]
          };
         console.log('[Unfault] Code lens resolved with title:', codeLens.command.title);
       } else {
         console.log('[Unfault] No impact data received');
-          codeLens.command = {
-            title: 'uf: analyzing...',
-            command: ''
-          };
+        return null;
       }
     } catch (error) {
       console.error('[Unfault] Error resolving code lens:', error);
       // Hide CodeLens on error
-      return null as unknown as vscode.CodeLens;
+      return null;
     }
 
     return codeLens;
@@ -1169,6 +1167,12 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
   });
   context.subscriptions.push(openSettingsCommand);
+
+  // Internal helper command used to keep CodeLens valid when click-to-open is disabled.
+  const noopCommand = vscode.commands.registerCommand('unfault.noop', () => {
+    // no-op
+  });
+  context.subscriptions.push(noopCommand);
 
   // Register command to show file dependents
   const showDependentsCommand = vscode.commands.registerCommand('unfault.showDependents', async () => {
