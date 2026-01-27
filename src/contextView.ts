@@ -459,7 +459,8 @@ export class ContextView implements vscode.WebviewViewProvider {
     const route = impact?.routes?.[0];
     const method = route?.method ? String(route.method).trim().toUpperCase() : null;
     const path = route?.path ? String(route.path) : null;
-    const appUrl = method && path ? this.joinUrl(baseUrl, path) : null;
+    const displayPath = path ? path.replace(/\{([^}]+)\}/g, '<$1>') : null;
+    const appUrl = method && displayPath ? this.joinUrl(baseUrl, displayPath) : null;
 
     const titleBits: string[] = [];
     titleBits.push(this.getFaultTemplateTitle(templateId));
@@ -560,6 +561,15 @@ export class ContextView implements vscode.WebviewViewProvider {
   }
 
   private joinUrl(baseUrl: string, path: string): string {
+    // URL() will percent-encode route placeholders like {id}, which is confusing
+    // in user-facing curl examples. Use a simple join when placeholders exist.
+    const hasPlaceholders = path.includes('{') || path.includes('}') || path.includes('<') || path.includes('>');
+    if (hasPlaceholders) {
+      const b = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      const p = path.startsWith('/') ? path : `/${path}`;
+      return `${b}${p}`;
+    }
+
     try {
       return new URL(path, baseUrl).toString();
     } catch {
@@ -587,6 +597,24 @@ export class ContextView implements vscode.WebviewViewProvider {
     if (vars.size === 1) {
       return Array.from(vars)[0] ?? null;
     }
+
+    const all = Array.from(vars);
+    const envLike = all.filter((v) => /^[A-Z][A-Z0-9_]*$/.test(v));
+    const urlish = envLike.filter((v) => /(^|_)(URL|URI|HOST|ENDPOINT)(_|$)/.test(v));
+
+    if (urlish.length === 1) {
+      return urlish[0] ?? null;
+    }
+
+    if (urlish.length > 1) {
+      const exact = urlish.find((v) => /(^|_)URL$/.test(v) || /_URL_/.test(v));
+      return exact ?? urlish[0] ?? null;
+    }
+
+    if (envLike.length === 1) {
+      return envLike[0] ?? null;
+    }
+
     return null;
   }
 
@@ -1812,7 +1840,9 @@ export class ContextView implements vscode.WebviewViewProvider {
         let triggerLine = '';
         if (route && routePath) {
           try {
-            triggerLine = 'curl -i -X ' + esc(String(route.method || 'GET').toUpperCase()) + ' ' + esc(new URL(routePath, baseUrl).toString());
+            const method = String(route.method || 'GET').toUpperCase();
+            const prettyPath = String(routePath).replace(/\{([^}]+)\}/g, '<$1>');
+            triggerLine = 'curl -i -X ' + esc(method) + ' ' + esc(joinUrlRaw(baseUrl, prettyPath));
           } catch {
             triggerLine = '';
           }
@@ -1904,7 +1934,37 @@ export class ContextView implements vscode.WebviewViewProvider {
       while ((m = jsRe.exec(text)) !== null) {
         vars.add(m[1]);
       }
-      return vars.size === 1 ? Array.from(vars)[0] : '';
+
+      if (vars.size === 1) {
+        return Array.from(vars)[0] || '';
+      }
+
+      // If there are multiple placeholders, prefer one that looks like an env var / base URL.
+      const all = Array.from(vars);
+      const envLike = all.filter(v => /^[A-Z][A-Z0-9_]*$/.test(v));
+
+      const urlish = envLike.filter(v => /(^|_)(URL|URI|HOST|ENDPOINT)(_|$)/.test(v));
+      if (urlish.length === 1) {
+        return urlish[0];
+      }
+      if (urlish.length > 1) {
+        // Prefer *_URL
+        const exact = urlish.find(v => /(^|_)URL$/.test(v) || /_URL_/.test(v));
+        return exact || urlish[0] || '';
+      }
+
+      if (envLike.length === 1) {
+        return envLike[0];
+      }
+
+      return '';
+    }
+
+    function joinUrlRaw(baseUrl, path) {
+      const b = String(baseUrl || '').replace(/\/+$/, '');
+      const p0 = String(path || '');
+      const p = p0.startsWith('/') ? p0 : ('/' + p0);
+      return b + p;
     }
 
     function render(state) {
