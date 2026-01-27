@@ -807,7 +807,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(statusBarItem);
 
   // Register the Explorer sidebar context view
-  contextView = new ContextView(context.extensionUri);
+  contextView = new ContextView(context.extensionUri, context.globalState);
   contextView.setServerState(serverState);
   contextView.setActiveEditor(vscode.window.activeTextEditor ?? null);
 

@@ -136,10 +136,13 @@ interface ContextViewState {
   activeImpact: FunctionImpactData | null;
   pinnedImpact: FunctionImpactData | null;
   activeHttpCall: HttpCallAtPositionData | null;
+  egressRemoteUrlByEnvVar: Record<string, string>;
   fault: FaultPanelState;
 }
 
 export class ContextView implements vscode.WebviewViewProvider {
+  private static readonly EGRESS_REMOTE_URL_CACHE_KEY = 'unfault.egressRemoteUrlByEnvVar';
+
   private view: vscode.WebviewView | null = null;
   private serverState: ServerState = 'starting';
   private activeEditor: vscode.TextEditor | null = null;
@@ -149,12 +152,20 @@ export class ContextView implements vscode.WebviewViewProvider {
   private pinnedImpact: FunctionImpactData | null = null;
   private activeHttpCall: HttpCallAtPositionData | null = null;
 
+  private egressRemoteUrlByEnvVar: Record<string, string> = {};
+
   private faultState: FaultPanelState;
   private lastFaultTerminal: vscode.Terminal | null = null;
 
-  constructor(private readonly extensionUri: vscode.Uri) {
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly globalState: vscode.Memento
+  ) {
     const config = vscode.workspace.getConfiguration('unfault');
     const baseUrl = config.get('fault.baseUrl', 'http://127.0.0.1:8000');
+
+    const cached = this.globalState.get<Record<string, string>>(ContextView.EGRESS_REMOTE_URL_CACHE_KEY);
+    this.egressRemoteUrlByEnvVar = cached && typeof cached === 'object' ? cached : {};
 
     this.faultState = {
       baseUrl,
@@ -197,7 +208,161 @@ export class ContextView implements vscode.WebviewViewProvider {
 
   setActiveHttpCall(call: HttpCallAtPositionData | null) {
     this.activeHttpCall = call;
+
+    // Best-effort: if we can identify the env var controlling the outbound URL,
+    // and it's set in VS Code's environment, prefill the sidebar by caching it.
+    const envVar = this.getEgressEnvVarForActiveHttpCall();
+    if (envVar) {
+      void this.maybeSeedEgressRemoteUrlFromEnvSources(envVar);
+    }
+
     this.postState();
+  }
+
+  private getEgressEnvVarForActiveHttpCall(): string | null {
+    const httpCall = this.activeHttpCall;
+    if (!httpCall) {
+      return null;
+    }
+
+    const direct = httpCall.urlExpr?.envVar ?? null;
+    if (direct) {
+      return direct;
+    }
+
+    const text = httpCall.urlExpr?.text ?? null;
+    if (!text) {
+      return null;
+    }
+
+    return this.inferEnvVarFromTemplateText(text);
+  }
+
+  private async maybeSeedEgressRemoteUrlFromEnvSources(envVar: string): Promise<void> {
+    const key = envVar.trim();
+    if (!key) {
+      return;
+    }
+
+    // Don't overwrite an existing cached value.
+    if (this.egressRemoteUrlByEnvVar[key]) {
+      return;
+    }
+
+    const raw = (await this.getEnvVarValueFromEnvSources(key)) ?? null;
+    if (!raw) {
+      return;
+    }
+
+    // If the env var already points to the local proxy, it's not the real remote.
+    if (raw.includes('127.0.0.1:9090') || raw.includes('localhost:9090')) {
+      return;
+    }
+
+    // Heuristic: we only seed values that look like URLs to avoid caching secrets.
+    const value = raw.trim();
+    if (!(value.startsWith('http://') || value.startsWith('https://'))) {
+      return;
+    }
+
+    await this.setCachedEgressRemoteUrl(key, value);
+  }
+
+  private async getEnvVarValueFromEnvSources(envVar: string): Promise<string | null> {
+    const direct = process.env[envVar];
+    if (direct) {
+      return direct;
+    }
+
+    const fromDotenv = await this.getDotenvValue(envVar);
+    return fromDotenv;
+  }
+
+  private async getDotenvValue(envVar: string): Promise<string | null> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return null;
+    }
+
+    // Keep the list short and predictable. Later entries override earlier ones.
+    // This matches common dotenv conventions.
+    const candidates = [
+      '.env',
+      '.env.local',
+      '.env.development',
+      '.env.development.local',
+      '.env.test',
+      '.env.test.local',
+      '.env.production',
+      '.env.production.local'
+    ];
+
+    let value: string | null = null;
+    for (const name of candidates) {
+      const uri = vscode.Uri.joinPath(workspaceFolder.uri, name);
+      const text = await this.readWorkspaceFileText(uri);
+      if (!text) {
+        continue;
+      }
+
+      const parsed = this.parseDotenv(text);
+      if (Object.prototype.hasOwnProperty.call(parsed, envVar)) {
+        value = parsed[envVar] ?? null;
+      }
+    }
+
+    return value;
+  }
+
+  private async readWorkspaceFileText(uri: vscode.Uri): Promise<string | null> {
+    try {
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch {
+      return null;
+    }
+  }
+
+  private parseDotenv(text: string): Record<string, string> {
+    const out: Record<string, string> = {};
+    const lines = text.split(/\r?\n/);
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) {
+        continue;
+      }
+
+      const stripped = line.startsWith('export ') ? line.slice('export '.length).trim() : line;
+      const eq = stripped.indexOf('=');
+      if (eq <= 0) {
+        continue;
+      }
+
+      const key = stripped.slice(0, eq).trim();
+      if (!key) {
+        continue;
+      }
+
+      let value = stripped.slice(eq + 1).trim();
+
+      // Strip trailing inline comments for unquoted values: KEY=value # comment
+      if (!(value.startsWith('"') || value.startsWith("'"))) {
+        const hash = value.indexOf(' #');
+        if (hash !== -1) {
+          value = value.slice(0, hash).trim();
+        }
+      }
+
+      // Unwrap simple quotes.
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+
+      out[key] = value;
+    }
+
+    return out;
   }
 
   clearPinnedImpact() {
@@ -294,7 +459,9 @@ export class ContextView implements vscode.WebviewViewProvider {
     const mode = message?.mode === 'egress' ? 'egress' : 'ingress';
 
     if (mode === 'egress') {
-      await this.runEgressFaultInjection(templateId);
+      const envVar = typeof message?.envVar === 'string' ? message.envVar : undefined;
+      const remoteUrl = typeof message?.remoteUrl === 'string' ? message.remoteUrl : undefined;
+      await this.runEgressFaultInjection(templateId, { envVar, remoteUrl });
       return;
     }
 
@@ -400,25 +567,19 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
   }
 
-  private async runEgressFaultInjection(templateId: FaultTemplateId) {
+  private async runEgressFaultInjection(
+    templateId: FaultTemplateId,
+    opts?: { envVar?: string; remoteUrl?: string }
+  ) {
     const httpCall = this.activeHttpCall;
     if (!httpCall) {
       vscode.window.showInformationMessage('Move your cursor onto an outbound HTTP call to run an egress fault injection.');
       return;
     }
 
-    let envVar = httpCall.urlExpr?.envVar ?? null;
+    let envVar = (opts?.envVar || '').trim() || httpCall.urlExpr?.envVar || null;
     if (!envVar && httpCall.urlExpr?.text) {
       envVar = this.inferEnvVarFromTemplateText(httpCall.urlExpr.text);
-    }
-    if (!envVar) {
-      envVar =
-        (await vscode.window.showInputBox({
-          title: 'Env var to override',
-          prompt:
-            'Enter the environment variable name that controls the outbound URL (e.g., KITCHEN_URL).',
-          placeHolder: 'KITCHEN_URL'
-        })) || null;
     }
     if (!envVar) {
       vscode.window.showWarningMessage(
@@ -427,12 +588,15 @@ export class ContextView implements vscode.WebviewViewProvider {
       return;
     }
 
+    const remoteUrlFromSidebar = (opts?.remoteUrl || '').trim();
+
     // Determine the remote target origin.
     let remote = '';
     if (httpCall.url) {
       remote = this.getRemoteTargetFromBaseUrl(httpCall.url);
     } else {
-      let envValue = process.env[envVar];
+      const cached = this.egressRemoteUrlByEnvVar[envVar];
+      let envValue = remoteUrlFromSidebar || cached || process.env[envVar];
 
       // If the env var already points to the local proxy, we cannot infer the real remote.
       if (envValue && (envValue.includes('127.0.0.1:9090') || envValue.includes('localhost:9090'))) {
@@ -440,18 +604,17 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
 
       if (!envValue) {
-        const entered = await vscode.window.showInputBox({
-          title: 'Remote URL for outbound call',
-          prompt: `Enter the current value of ${envVar} (the real remote URL). We'll start a proxy to that origin, then you can set ${envVar}=http://127.0.0.1:9090 when running your app.`,
-          placeHolder: 'https://api.example.com'
-        });
-        if (!entered) {
-          return;
-        }
-        envValue = entered;
+        vscode.window.showWarningMessage(
+          `Missing remote URL for ${envVar}. Fill it in the OUTBOUND FAULT INJECTION panel (Remote URL), then try again.`
+        );
+        return;
       }
 
       remote = this.getRemoteTargetFromBaseUrl(envValue);
+
+      if (remoteUrlFromSidebar) {
+        await this.setCachedEgressRemoteUrl(envVar, envValue);
+      }
     }
 
     const baseUrl = this.faultState.baseUrl || 'http://127.0.0.1:8000';
@@ -974,8 +1137,24 @@ export class ContextView implements vscode.WebviewViewProvider {
       activeImpact: this.activeImpact,
       pinnedImpact: this.pinnedImpact,
       activeHttpCall: this.activeHttpCall,
+      egressRemoteUrlByEnvVar: this.egressRemoteUrlByEnvVar,
       fault: this.faultState
     };
+  }
+
+  private async setCachedEgressRemoteUrl(envVar: string, url: string): Promise<void> {
+    const key = envVar.trim();
+    const value = url.trim();
+    if (!key || !value) {
+      return;
+    }
+
+    this.egressRemoteUrlByEnvVar = {
+      ...this.egressRemoteUrlByEnvVar,
+      [key]: value
+    };
+    await this.globalState.update(ContextView.EGRESS_REMOTE_URL_CACHE_KEY, this.egressRemoteUrlByEnvVar);
+    this.postState();
   }
 
   private postState() {
@@ -1548,15 +1727,26 @@ export class ContextView implements vscode.WebviewViewProvider {
 
     let faultForm = getPersistedState().faultForm || {
       inboundTemplateId: 'latency_tail_normal',
-      outboundTemplateId: 'latency_tail_normal'
+      outboundTemplateId: 'latency_tail_normal',
+      egressEnvVar: '',
+      egressRemoteUrlByEnvVar: {}
     };
 
     // Backwards compat for older stored state
     if (faultForm && faultForm.templateId && !faultForm.inboundTemplateId) {
       faultForm = {
         inboundTemplateId: faultForm.templateId,
-        outboundTemplateId: faultForm.templateId
+        outboundTemplateId: faultForm.templateId,
+        egressEnvVar: '',
+        egressRemoteUrlByEnvVar: {}
       };
+    }
+
+    if (!faultForm.egressEnvVar) {
+      faultForm.egressEnvVar = '';
+    }
+    if (!faultForm.egressRemoteUrlByEnvVar || typeof faultForm.egressRemoteUrlByEnvVar !== 'object') {
+      faultForm.egressRemoteUrlByEnvVar = {};
     }
 
     function setFaultForm(updates) {
@@ -1832,7 +2022,17 @@ export class ContextView implements vscode.WebviewViewProvider {
         const inferredEnvVar = (!detectedEnvVar && outbound.urlExpr && outbound.urlExpr.text)
           ? inferEnvVarFromTemplateText(String(outbound.urlExpr.text))
           : '';
-        const envVar = detectedEnvVar || inferredEnvVar;
+
+        const formEnvVar = String(faultForm.egressEnvVar || '').trim();
+        const envVar = formEnvVar || detectedEnvVar || inferredEnvVar;
+
+        const cachedByEnvVar = (state.egressRemoteUrlByEnvVar && envVar)
+          ? String(state.egressRemoteUrlByEnvVar[envVar] || '')
+          : '';
+        const localCacheByEnvVar = (faultForm.egressRemoteUrlByEnvVar && envVar)
+          ? String(faultForm.egressRemoteUrlByEnvVar[envVar] || '')
+          : '';
+        const remoteUrlValue = localCacheByEnvVar || cachedByEnvVar;
         const canRunEgress = true;
         const urlLabel = outbound.url
           ? String(outbound.url)
@@ -1869,6 +2069,19 @@ export class ContextView implements vscode.WebviewViewProvider {
         const hint =
           'App → proxy → remote (tests resilience to dependency failures).';
 
+        const envVarField =
+          '<div class="field">' +
+          '<label for="egress-env-var">Env var</label>' +
+          '<input class="input" id="egress-env-var" placeholder="KITCHEN_URL" value="' + esc(envVar) + '" />' +
+          '</div>';
+
+        const remoteUrlField =
+          '<div class="field">' +
+          '<label for="egress-remote-url">Remote URL (current value)</label>' +
+          '<input class="input" id="egress-remote-url" placeholder="https://api.example.com" value="' + esc(remoteUrlValue) + '" />' +
+          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">Used to start the proxy. Cached by env var name.</div>' +
+          '</div>';
+
         return '<div class="card" style="margin-top: 8px;">' +
           '<div class="card-header">' +
           '<span class="card-title">Outbound fault injection</span>' +
@@ -1880,13 +2093,15 @@ export class ContextView implements vscode.WebviewViewProvider {
           '</div>' +
           (envVar ? (
             '<div class="muted" style="margin-top: 6px;">' +
-            (detectedEnvVar
-              ? 'Detected env var: '
-              : 'Inferred env var: ') +
+            (formEnvVar
+              ? 'Using env var: '
+              : (detectedEnvVar ? 'Detected env var: ' : 'Inferred env var: ')) +
             '<span style="font-family: var(--vscode-editor-font-family);">' + esc(envVar) + '</span>' +
             '</div>'
-          ) : ('<div class="muted" style="margin-top: 6px;">Env var: <span style="font-family: var(--vscode-editor-font-family);">(not detected)</span> — you will be prompted.</div>')) +
+          ) : ('<div class="muted" style="margin-top: 6px;">Env var: <span style="font-family: var(--vscode-editor-font-family);">(not detected)</span> — fill it below.</div>')) +
           '<div class="form-grid" style="margin-top: 8px;">' +
+          envVarField +
+          remoteUrlField +
           '<div class="field">' +
           '<label for="fault-template-outbound">Fault type</label>' +
           '<select class="select" id="fault-template-outbound">' +
@@ -2416,10 +2631,26 @@ export class ContextView implements vscode.WebviewViewProvider {
           }
           const templateId = templateEl.value;
           setFaultForm({ outboundTemplateId: templateId });
+
+          const envVarEl = document.getElementById('egress-env-var');
+          const remoteEl = document.getElementById('egress-remote-url');
+          const envVar = envVarEl && envVarEl.value ? String(envVarEl.value).trim() : '';
+          const remoteUrl = remoteEl && remoteEl.value ? String(remoteEl.value).trim() : '';
+          if (envVar) {
+            setFaultForm({ egressEnvVar: envVar });
+          }
+          if (envVar && remoteUrl) {
+            const next = { ...(faultForm.egressRemoteUrlByEnvVar || {}) };
+            next[envVar] = remoteUrl;
+            setFaultForm({ egressRemoteUrlByEnvVar: next });
+          }
+
           vscode.postMessage({
             command: 'faultRun',
             mode: 'egress',
-            templateId
+            templateId,
+            envVar,
+            remoteUrl
           });
           break;
         }
@@ -2432,7 +2663,21 @@ export class ContextView implements vscode.WebviewViewProvider {
     document.addEventListener('input', (event) => {
       const el = event.target;
       if (!el || !el.id) return;
-      // no text inputs
+      if (el.id === 'egress-env-var') {
+        setFaultForm({ egressEnvVar: String(el.value || '') });
+        return;
+      }
+      if (el.id === 'egress-remote-url') {
+        const envVarEl = document.getElementById('egress-env-var');
+        const envVar = envVarEl && envVarEl.value ? String(envVarEl.value).trim() : '';
+        if (!envVar) {
+          return;
+        }
+        const next = { ...(faultForm.egressRemoteUrlByEnvVar || {}) };
+        next[envVar] = String(el.value || '');
+        setFaultForm({ egressRemoteUrlByEnvVar: next });
+        return;
+      }
     });
 
     document.addEventListener('change', (event) => {
