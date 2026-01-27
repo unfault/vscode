@@ -2107,7 +2107,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           '<div class="field">' +
           '<label for="egress-remote-url">Remote base URL (current value)</label>' +
           '<input class="input" id="egress-remote-url" placeholder="https://api.example.com" value="' + esc(remoteUrlValue) + '" />' +
-          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">The proxy forwards to this URL. Cached by env var name.</div>' +
+          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">The proxy forwards to this URL.</div>' +
           '</div>';
 
         const flow =
@@ -2129,17 +2129,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           '<div class="muted" style="margin-top: 4px; line-height: 1.35;">' + esc(why) + '</div>' +
           flow +
           '<div class="muted" style="margin-top: 6px; line-height: 1.35;">' + esc(how) + '</div>' +
-          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">' +
-          esc(outbound.library + ' ' + outbound.method + ' ' + urlLabel) +
-          '</div>' +
-          (envVar ? (
-            '<div class="muted" style="margin-top: 6px;">' +
-            (formEnvVar
-              ? 'Using env var: '
-              : (detectedEnvVar ? 'Detected env var: ' : 'Inferred env var: ')) +
-            '<span style="font-family: var(--vscode-editor-font-family);">' + esc(envVar) + '</span>' +
-            '</div>'
-          ) : ('<div class="muted" style="margin-top: 6px;">Env var: <span style="font-family: var(--vscode-editor-font-family);">(not detected)</span> — fill it below.</div>')) +
+          '' +
           '<div class="form-grid" style="margin-top: 8px;">' +
           envVarField +
           remoteUrlField +
