@@ -1528,9 +1528,11 @@ export class ContextView implements vscode.WebviewViewProvider {
    </div>
 
   <script nonce="${nonce}">
+    console.log('[Unfault webview] Script starting');
     const vscode = acquireVsCodeApi();
 
     // Ask the extension for the latest state once the script is ready.
+    console.log('[Unfault webview] Posting ready message');
     vscode.postMessage({ command: 'ready' });
 
     function esc(s) {
@@ -2449,9 +2451,11 @@ export class ContextView implements vscode.WebviewViewProvider {
 
     window.addEventListener('message', (event) => {
       const message = event.data;
+      console.log('[Unfault webview] Received message', message?.type);
       if (!message) return;
 
       if (message.type === 'state') {
+        console.log('[Unfault webview] Rendering state', { serverState: message.state?.serverState });
         window.__lastState = message.state;
         render(message.state);
         return;
@@ -2473,6 +2477,8 @@ export class ContextView implements vscode.WebviewViewProvider {
         }
       }
     });
+
+    console.log('[Unfault webview] Script fully loaded and message listeners registered');
   </script>
 </body>
 </html>`;
