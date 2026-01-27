@@ -1677,13 +1677,16 @@ export class ContextView implements vscode.WebviewViewProvider {
       opacity: 0.8;
     }
     .flow-node.app {
-      border-color: var(--vscode-charts-blue);
+      border-color: var(--vscode-charts-blue, var(--vscode-focusBorder));
+    }
+    .flow-node.client {
+      border-color: var(--vscode-charts-green, var(--vscode-focusBorder));
     }
     .flow-node.proxy {
-      border-color: var(--vscode-charts-yellow);
+      border-color: var(--vscode-charts-yellow, var(--vscode-focusBorder));
     }
     .flow-node.remote {
-      border-color: var(--vscode-charts-orange);
+      border-color: var(--vscode-charts-orange, var(--vscode-focusBorder));
     }
 
     @keyframes faultFlash {
@@ -1976,12 +1979,30 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       const inboundTitle = impact ? (funcName || 'Current function') : 'Current function';
 
+      const inboundWhy =
+        'Inbound fault injection helps you see how your API behaves for clients when the network is slow, lossy, or unstable.';
+
+      const inboundHow =
+        'We start a local fault proxy in front of your app at ' + remoteOrigin + '. ' +
+        'Send requests to the proxy URL to inject faults (your app still receives the same route).';
+
+      const inboundFlow =
+        '<div class="flow">' +
+        '<span class="flow-node client">client</span>' +
+        '<span class="flow-arrow">→</span>' +
+        '<span class="flow-node proxy">fault proxy</span>' +
+        '<span class="flow-arrow">→</span>' +
+        '<span class="flow-node app">app</span>' +
+        '</div>';
+
       const inboundBody =
         '<div class="card-header">' +
         '<span class="card-title">' + esc(inboundTitle) + '</span>' +
         '<span>' + statusPill + '</span>' +
         '</div>' +
-        '<div class="muted" style="margin-top: 4px; line-height: 1.3;">Client → proxy → app (tests the API boundary).</div>' +
+        '<div class="muted" style="margin-top: 4px; line-height: 1.35;">' + esc(inboundWhy) + '</div>' +
+        inboundFlow +
+        '<div class="muted" style="margin-top: 6px; line-height: 1.35;">' + esc(inboundHow) + '</div>' +
         '<div class="form-grid" style="margin-top: 8px;">' +
         '<div class="field">' +
         '<label for="fault-template-inbound">Fault type</label>' +
@@ -2007,7 +2028,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         '<button class="button" data-action="faultGenerateScenarioFile"' + (canRun ? '' : ' disabled') + '>Generate scenario file</button>' +
         '</div>' +
         '<div class="code" style="margin-top: 8px;">' +
-        esc('Remote: ' + remoteOrigin + '\\nProxy URL: ' + proxyUrl) +
+        esc('Proxy URL (send requests here): ' + proxyUrl + '\\nForwards to: ' + remoteOrigin) +
         '</div>' +
         '<div class="muted" style="margin-top: 8px; line-height: 1.3;">HTTP error templates are not available in streaming proxy mode.</div>' +
         (isRunning ? '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Restart proxy will stop the current proxy and start a new one.</div>' : '') +
@@ -2091,6 +2112,8 @@ export class ContextView implements vscode.WebviewViewProvider {
 
         const flow =
           '<div class="flow">' +
+          '<span class="flow-node client">client</span>' +
+          '<span class="flow-arrow">→</span>' +
           '<span class="flow-node app">app</span>' +
           '<span class="flow-arrow">→</span>' +
           '<span class="flow-node proxy">fault proxy</span>' +
