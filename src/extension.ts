@@ -228,6 +228,12 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
     _token: vscode.CancellationToken
   ): Promise<vscode.CodeLens[]> {
     console.log(`[Unfault] provideCodeLenses called for ${document.uri.toString()} (${document.languageId})`);
+
+    // Avoid returning unresolved CodeLenses before the server is ready.
+    // VS Code will try to resolve them and will error if they end up without commands.
+    if (!client || serverState !== 'running') {
+      return [];
+    }
     
     if (!this.isCodeLensEnabled()) {
       console.log('[Unfault] Code lens disabled in settings');
@@ -354,8 +360,18 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
         return null;
       }
     } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('Canceled')) {
+        // Normal during rapid cursor/file changes.
+        return null;
+      }
       console.error('[Unfault] Error resolving code lens:', error);
       // Hide CodeLens on error
+      return null;
+    }
+
+    // Safety: only return resolved CodeLenses with a valid command.
+    if (!codeLens.command || !codeLens.command.command) {
       return null;
     }
 
