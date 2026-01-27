@@ -1061,6 +1061,50 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
     .button:hover { text-decoration: underline; }
 
+    .help {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid var(--vscode-widget-border);
+      color: var(--vscode-descriptionForeground);
+      font-size: 10px;
+      line-height: 1;
+      background: transparent;
+      cursor: default;
+      user-select: none;
+    }
+
+    .steps {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .step {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      line-height: 1.3;
+    }
+    .step-n {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--vscode-widget-border);
+      color: var(--vscode-foreground);
+      font-size: 10px;
+      flex: 0 0 auto;
+    }
+    .step-body {
+      flex: 1;
+    }
+
     .divider { 
       height: 1px; 
       background: var(--vscode-widget-border); 
@@ -1466,8 +1510,17 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     let faultForm = getPersistedState().faultForm || {
-      templateId: 'latency_tail_normal'
+      inboundTemplateId: 'latency_tail_normal',
+      outboundTemplateId: 'latency_tail_normal'
     };
+
+    // Backwards compat for older stored state
+    if (faultForm && faultForm.templateId && !faultForm.inboundTemplateId) {
+      faultForm = {
+        inboundTemplateId: faultForm.templateId,
+        outboundTemplateId: faultForm.templateId
+      };
+    }
 
     function setFaultForm(updates) {
       faultForm = { ...faultForm, ...updates };
@@ -1585,9 +1638,16 @@ export class ContextView implements vscode.WebviewViewProvider {
       const outbound = state.activeHttpCall || null;
 
       if (!impact && !outbound) {
-        return '<div class="section" id="fault-injection-section">' +
-          '<div class="section-label">FAULT INJECTION</div>' +
-          '<div class="card"><div class="muted">Move your cursor inside a function (ingress) or onto an outbound HTTP call (egress).</div></div>' +
+        const inboundHelp = 'Inbound fault injection runs a local proxy between your client (curl) and your app server. Use it to validate timeouts, retries, and error handling at the API boundary.';
+        const outboundHelp = 'Outbound fault injection runs a local proxy between your app and a remote HTTP dependency. Set the dependency URL env var to the proxy address and restart your app.';
+
+        return '<div class="section" id="fault-injection-inbound">' +
+          '<div class="section-label">INBOUND FAULT INJECTION <span class="help" title="' + esc(inboundHelp) + '">?</span></div>' +
+          '<div class="card"><div class="muted">Move your cursor inside a function that is reachable from a route to enable inbound injection.</div></div>' +
+          '</div>' +
+          '<div class="section" id="fault-injection-outbound">' +
+          '<div class="section-label">OUTBOUND FAULT INJECTION <span class="help" title="' + esc(outboundHelp) + '">?</span></div>' +
+          '<div class="card"><div class="muted">Move your cursor onto an outbound HTTP call (e.g. httpx.get/post, requests.get/post, fetch) to enable outbound injection.</div></div>' +
           '</div>';
       }
 
@@ -1611,14 +1671,19 @@ export class ContextView implements vscode.WebviewViewProvider {
         'blackhole_window'
       ];
 
-      const templateIdRaw = faultForm.templateId || 'latency_tail_normal';
-      const templateId = knownTemplates.includes(templateIdRaw) ? templateIdRaw : 'latency_tail_normal';
+      function normalizeTemplateId(raw) {
+        const id = raw || 'latency_tail_normal';
+        return knownTemplates.includes(id) ? id : 'latency_tail_normal';
+      }
+
+      const inboundTemplateId = normalizeTemplateId(faultForm.inboundTemplateId || faultForm.templateId);
+      const outboundTemplateId = normalizeTemplateId(faultForm.outboundTemplateId || faultForm.templateId);
 
       const isRunning = faultState.status === 'running';
       const canRun = !!impact;
 
-      function opt(id, label) {
-        const selected = templateId === id ? ' selected' : '';
+      function opt(selectedId, id, label) {
+        const selected = selectedId === id ? ' selected' : '';
         return '<option value="' + esc(id) + '"' + selected + '>' + esc(label) + '</option>';
       }
 
@@ -1637,7 +1702,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         ? '<div class="signal warning" style="margin-top: 8px;"><span class="signal-content">' + esc(faultState.lastError) + '</span></div>'
         : '';
 
-      const templateIntent = (() => {
+      function templateIntentFor(templateId) {
         if (templateId === 'latency_tail_normal') {
           return 'Intent: expose timeout handling and tail-latency amplification (steady slow upstream).';
         }
@@ -1675,46 +1740,50 @@ export class ContextView implements vscode.WebviewViewProvider {
           return 'Intent: simulate a temporary outage and verify recovery behavior.';
         }
         return '';
-      })();
+      }
 
-      const ingressTitle = impact ? (funcName || 'Current function') : 'Ingress (route)';
+      const inboundHelp = 'Inbound fault injection runs a local proxy between your client (curl) and your app server. Use it to validate timeouts, retries, and error handling at the API boundary.';
+      const outboundHelp = 'Outbound fault injection runs a local proxy between your app and a remote HTTP dependency. Set the dependency URL env var to the proxy address and restart your app.';
 
-      const body =
+      const inboundTitle = impact ? (funcName || 'Current function') : 'Current function';
+
+      const inboundBody =
         '<div class="card-header">' +
-        '<span class="card-title">' + esc(ingressTitle) + '</span>' +
+        '<span class="card-title">' + esc(inboundTitle) + '</span>' +
         '<span>' + statusPill + '</span>' +
         '</div>' +
-        '<div class="form-grid">' +
+        '<div class="muted" style="margin-top: 4px; line-height: 1.3;">Client → proxy → app (tests the API boundary).</div>' +
+        '<div class="form-grid" style="margin-top: 8px;">' +
         '<div class="field">' +
-        '<label for="fault-template">Template</label>' +
-        '<select class="select" id="fault-template">' +
-        opt('latency_tail_normal', 'Latency: tail (350ms +/- 50ms)') +
-        opt('latency_tail_spikes_pareto', 'Latency: tail spikes (pareto)') +
-        opt('latency_brownout_window', 'Latency: brownout window (sched)') +
-        opt('jitter_light_ingress', 'Jitter: light ingress (30ms @ 5Hz)') +
-        opt('jitter_bidirectional', 'Jitter: bidirectional (30ms @ 8Hz)') +
-        opt('bandwidth_server_ingress_64_kbps', 'Bandwidth: server ingress (64 KBps)') +
-        opt('bandwidth_client_both_48_kbps_plus_latency', 'Bandwidth: client both (48 KBps) + latency') +
-        opt('mobile_edge_3g', 'Mobile edge: 48 KBps + 200ms + jitter') +
-        opt('packet_loss_constant', 'Packet loss: constant') +
-        opt('packet_loss_burst', 'Packet loss: burst window (sched)') +
-        opt('blackhole_constant', 'Blackhole: constant') +
-        opt('blackhole_window', 'Blackhole: outage window (sched)') +
+        '<label for="fault-template-inbound">Fault type</label>' +
+        '<select class="select" id="fault-template-inbound">' +
+        opt(inboundTemplateId, 'latency_tail_normal', 'Latency: tail (350ms +/- 50ms)') +
+        opt(inboundTemplateId, 'latency_tail_spikes_pareto', 'Latency: tail spikes (pareto)') +
+        opt(inboundTemplateId, 'latency_brownout_window', 'Latency: brownout window (sched)') +
+        opt(inboundTemplateId, 'jitter_light_ingress', 'Jitter: light ingress (30ms @ 5Hz)') +
+        opt(inboundTemplateId, 'jitter_bidirectional', 'Jitter: bidirectional (30ms @ 8Hz)') +
+        opt(inboundTemplateId, 'bandwidth_server_ingress_64_kbps', 'Bandwidth: server ingress (64 KBps)') +
+        opt(inboundTemplateId, 'bandwidth_client_both_48_kbps_plus_latency', 'Bandwidth: client both (48 KBps) + latency') +
+        opt(inboundTemplateId, 'mobile_edge_3g', 'Mobile edge: 48 KBps + 200ms + jitter') +
+        opt(inboundTemplateId, 'packet_loss_constant', 'Packet loss: constant') +
+        opt(inboundTemplateId, 'packet_loss_burst', 'Packet loss: burst window (sched)') +
+        opt(inboundTemplateId, 'blackhole_constant', 'Blackhole: constant') +
+        opt(inboundTemplateId, 'blackhole_window', 'Blackhole: outage window (sched)') +
         '</select>' +
-        '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' + esc(templateIntent) + '</div>' +
-        '<div class="muted" style="margin-top: 6px; line-height: 1.3;">HTTP error templates are not available in streaming proxy mode.</div>' +
+        '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' + esc(templateIntentFor(inboundTemplateId)) + '</div>' +
         '</div>' +
         '</div>' +
-        '<div class="button-row">' +
-        '<button class="button" data-action="faultRun"' + (canRun ? '' : ' disabled') + '>' + (isRunning ? 'Restart' : 'Run') + '</button>' +
+        '<div class="button-row" style="margin-top: 8px;">' +
+        '<button class="button" data-action="faultRunInbound"' + (canRun ? '' : ' disabled') + '>' + (isRunning ? 'Restart proxy' : 'Start proxy') + '</button>' +
         '<button class="button" data-action="faultGenerateScenarioFile"' + (canRun ? '' : ' disabled') + '>Generate scenario file</button>' +
         '</div>' +
-        (canRun
-          ? ('<div class="muted" style="margin-top: 6px; line-height: 1.3;">' +
-            'This starts a streaming proxy at <span style="font-family: var(--vscode-editor-font-family);">127.0.0.1:9090</span> mapped to <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteOrigin) + '</span> and opens a curl command targeting <span style="font-family: var(--vscode-editor-font-family);">' + esc(proxyUrl) + '</span>.' +
-            '</div>')
-          : ('<div class="muted" style="margin-top: 6px; line-height: 1.3;">Move your cursor inside a function to enable ingress fault injection.</div>')) +
-        (isRunning ? '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Selecting a new template and clicking Restart will stop the current proxy and start a new one.</div>' : '') +
+        '<div class="steps">' +
+        '<div class="step"><span class="step-n">1</span><div class="step-body">Start the proxy for <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteOrigin) + '</span>.</div></div>' +
+        '<div class="step"><span class="step-n">2</span><div class="step-body">Send your request via the proxy: <span style="font-family: var(--vscode-editor-font-family);">' + esc(proxyUrl) + '</span>.</div></div>' +
+        '<div class="step"><span class="step-n">3</span><div class="step-body">Observe behavior: timeouts, retries, fallbacks, error messages.</div></div>' +
+        '</div>' +
+        '<div class="muted" style="margin-top: 8px; line-height: 1.3;">HTTP error templates are not available in streaming proxy mode.</div>' +
+        (isRunning ? '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Restart proxy will stop the current proxy and start a new one.</div>' : '') +
         errorLine;
 
       const egressCard = (() => {
@@ -1727,7 +1796,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           ? inferEnvVarFromTemplateText(String(outbound.urlExpr.text))
           : '';
         const envVar = detectedEnvVar || inferredEnvVar;
-        const canRunEgress = !!envVar;
+        const canRunEgress = true;
         const urlLabel = outbound.url
           ? String(outbound.url)
           : (outbound.urlExpr ? String(outbound.urlExpr.text) : '');
@@ -1738,7 +1807,7 @@ export class ContextView implements vscode.WebviewViewProvider {
 
         const exportLine = envVar
           ? ('export ' + envVar + '=http://127.0.0.1:9090')
-          : '';
+          : 'export YOUR_DEP_URL=http://127.0.0.1:9090';
 
         let triggerLine = '';
         if (route && routePath) {
@@ -1749,19 +1818,24 @@ export class ContextView implements vscode.WebviewViewProvider {
           }
         }
 
-        const steps = (exportLine ? ('<div class="code">' + esc(exportLine) + '</div>') : '') +
-          (triggerLine ? ('<div class="code" style="margin-top: 6px;">' + esc(triggerLine) + '</div>') :
-            '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Then trigger the code path that performs this outbound call.</div>');
+        const steps =
+          '<div class="steps">' +
+          '<div class="step"><span class="step-n">1</span><div class="step-body">Start the proxy for the remote dependency: <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteHint || 'your dependency origin') + '</span>.</div></div>' +
+          '<div class="step"><span class="step-n">2</span><div class="step-body">Point your app at the proxy (restart required):</div></div>' +
+          '<div class="code" style="margin-left: 24px;">' + esc(exportLine) + '</div>' +
+          '<div class="step"><span class="step-n">3</span><div class="step-body">Trigger the code path that performs the outbound call.' + (triggerLine ? ' (Example curl provided.)' : '') + '</div></div>' +
+          (triggerLine ? ('<div class="code" style="margin-left: 24px;">' + esc(triggerLine) + '</div>') : '') +
+          '</div>';
 
-        const hint = canRunEgress
-          ? ('Proxy target: <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteHint) + '</span>')
-          : 'Tip: use os.getenv(...) / process.env.* to make the URL configurable.';
+        const hint =
+          'App → proxy → remote (tests resilience to dependency failures).';
 
         return '<div class="card" style="margin-top: 8px;">' +
           '<div class="card-header">' +
-          '<span class="card-title">Outbound HTTP call</span>' +
-          '<span class="pill">Egress</span>' +
+          '<span class="card-title">Outbound fault injection</span>' +
+          '<span class="pill">Outbound</span>' +
           '</div>' +
+          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">' + esc(hint) + '</div>' +
           '<div class="muted" style="margin-top: 4px; line-height: 1.3;">' +
           esc(outbound.library + ' ' + outbound.method + ' ' + urlLabel) +
           '</div>' +
@@ -1772,20 +1846,50 @@ export class ContextView implements vscode.WebviewViewProvider {
               : 'Inferred env var: ') +
             '<span style="font-family: var(--vscode-editor-font-family);">' + esc(envVar) + '</span>' +
             '</div>'
-          ) : '') +
-          '<div class="button-row" style="margin-top: 8px;">' +
-          '<button class="button" data-action="faultRunEgress"' + (canRunEgress ? '' : ' disabled') + '>' + (isRunning ? 'Restart' : 'Run') + '</button>' +
+          ) : ('<div class="muted" style="margin-top: 6px;">Env var: <span style="font-family: var(--vscode-editor-font-family);">(not detected)</span> — you will be prompted.</div>')) +
+          '<div class="form-grid" style="margin-top: 8px;">' +
+          '<div class="field">' +
+          '<label for="fault-template-outbound">Fault type</label>' +
+          '<select class="select" id="fault-template-outbound">' +
+          opt(outboundTemplateId, 'latency_tail_normal', 'Latency: tail (350ms +/- 50ms)') +
+          opt(outboundTemplateId, 'latency_tail_spikes_pareto', 'Latency: tail spikes (pareto)') +
+          opt(outboundTemplateId, 'latency_brownout_window', 'Latency: brownout window (sched)') +
+          opt(outboundTemplateId, 'jitter_light_ingress', 'Jitter: light ingress (30ms @ 5Hz)') +
+          opt(outboundTemplateId, 'jitter_bidirectional', 'Jitter: bidirectional (30ms @ 8Hz)') +
+          opt(outboundTemplateId, 'bandwidth_server_ingress_64_kbps', 'Bandwidth: server ingress (64 KBps)') +
+          opt(outboundTemplateId, 'bandwidth_client_both_48_kbps_plus_latency', 'Bandwidth: client both (48 KBps) + latency') +
+          opt(outboundTemplateId, 'mobile_edge_3g', 'Mobile edge: 48 KBps + 200ms + jitter') +
+          opt(outboundTemplateId, 'packet_loss_constant', 'Packet loss: constant') +
+          opt(outboundTemplateId, 'packet_loss_burst', 'Packet loss: burst window (sched)') +
+          opt(outboundTemplateId, 'blackhole_constant', 'Blackhole: constant') +
+          opt(outboundTemplateId, 'blackhole_window', 'Blackhole: outage window (sched)') +
+          '</select>' +
+          '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' + esc(templateIntentFor(outboundTemplateId)) + '</div>' +
           '</div>' +
-          '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' + esc(hint) + '</div>' +
+          '</div>' +
+          '<div class="button-row" style="margin-top: 8px;">' +
+          '<button class="button" data-action="faultRunOutbound"' + (canRunEgress ? '' : ' disabled') + '>' + (isRunning ? 'Restart proxy' : 'Start proxy') + '</button>' +
+          '</div>' +
           '<div style="margin-top: 8px;">' + steps + '</div>' +
           '</div>';
       })();
 
-      return '<div class="section" id="fault-injection-section">' +
-        '<div class="section-label">FAULT INJECTION</div>' +
-        '<div class="card">' + body + '</div>' +
-        egressCard +
+      const inboundSection = '<div class="section" id="fault-injection-inbound">' +
+        '<div class="section-label">INBOUND FAULT INJECTION <span class="help" title="' + esc(inboundHelp) + '">?</span></div>' +
+        '<div class="card">' + inboundBody + '</div>' +
         '</div>';
+
+      const outboundSection = egressCard
+        ? ('<div class="section" id="fault-injection-outbound">' +
+          '<div class="section-label">OUTBOUND FAULT INJECTION <span class="help" title="' + esc(outboundHelp) + '">?</span></div>' +
+          egressCard +
+          '</div>')
+        : ('<div class="section" id="fault-injection-outbound">' +
+          '<div class="section-label">OUTBOUND FAULT INJECTION <span class="help" title="' + esc(outboundHelp) + '">?</span></div>' +
+          '<div class="card"><div class="muted">Move your cursor onto an outbound HTTP call to enable outbound injection.</div></div>' +
+          '</div>');
+
+      return inboundSection + outboundSection;
     }
 
     function inferEnvVarFromTemplateText(text) {
@@ -2201,57 +2305,39 @@ export class ContextView implements vscode.WebviewViewProvider {
             signal.classList.toggle('expanded', isHidden);
           }
           break;
-        case 'faultRun':
-          const templateEl = document.getElementById('fault-template');
-
+        case 'faultRunInbound': {
+          const templateEl = document.getElementById('fault-template-inbound');
           if (!templateEl) {
             return;
           }
-
           const templateId = templateEl.value;
-
+          setFaultForm({ inboundTemplateId: templateId });
           vscode.postMessage({
             command: 'faultRun',
+            mode: 'ingress',
             templateId
           });
           break;
-        case 'faultRunEgress':
-          const templateEl2 = document.getElementById('fault-template');
-          if (!templateEl2) {
+        }
+        case 'faultRunOutbound': {
+          const templateEl = document.getElementById('fault-template-outbound');
+          if (!templateEl) {
             return;
           }
-          const templateId2 = templateEl2.value;
+          const templateId = templateEl.value;
+          setFaultForm({ outboundTemplateId: templateId });
           vscode.postMessage({
             command: 'faultRun',
             mode: 'egress',
-            templateId: templateId2
+            templateId
           });
           break;
+        }
         case 'faultGenerateScenarioFile':
           vscode.postMessage({ command: 'faultGenerateScenarioFile' });
           break;
       }
     });
-
-    function handleFaultFormInputChange() {
-      const templateEl = document.getElementById('fault-template');
-      if (!templateEl) return;
-
-      setFaultForm({
-        templateId: templateEl.value,
-      });
-
-      // Re-render immediately so the intent/description updates
-      // when the user selects a different template.
-      if (window.__lastState) {
-        render(window.__lastState);
-
-        const nextTemplateEl = document.getElementById('fault-template');
-        if (nextTemplateEl && typeof nextTemplateEl.focus === 'function') {
-          nextTemplateEl.focus();
-        }
-      }
-    }
 
     document.addEventListener('input', (event) => {
       const el = event.target;
@@ -2262,8 +2348,15 @@ export class ContextView implements vscode.WebviewViewProvider {
     document.addEventListener('change', (event) => {
       const el = event.target;
       if (!el || !el.id) return;
-      if (el.id === 'fault-template') {
-        handleFaultFormInputChange();
+      if (el.id === 'fault-template-inbound') {
+        setFaultForm({ inboundTemplateId: el.value });
+      }
+      if (el.id === 'fault-template-outbound') {
+        setFaultForm({ outboundTemplateId: el.value });
+      }
+
+      if (window.__lastState) {
+        render(window.__lastState);
       }
     });
 
@@ -2278,7 +2371,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
 
       if (message.type === 'focusFaultInjection') {
-        const section = document.getElementById('fault-injection-section');
+        const section = document.getElementById('fault-injection-inbound');
         if (section) {
           section.scrollIntoView({ block: 'center' });
           section.classList.remove('flash');
@@ -2287,7 +2380,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           section.classList.add('flash');
         }
 
-        const templateEl = document.getElementById('fault-template');
+        const templateEl = document.getElementById('fault-template-inbound');
         if (templateEl && typeof templateEl.focus === 'function') {
           templateEl.focus();
         }
