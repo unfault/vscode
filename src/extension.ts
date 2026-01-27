@@ -23,7 +23,7 @@ import {
   ExecuteCommandRequest
 } from 'vscode-languageclient/node';
 import { WelcomePanel } from './welcomePanel';
-import { ContextView } from './contextView';
+import { ContextView, HttpCallAtPositionData } from './contextView';
 
 let client: LanguageClient;
 let statusBarItem: vscode.StatusBarItem;
@@ -32,6 +32,7 @@ let contextView: ContextView | null = null;
 // Cache key for cursor-following to avoid redundant API calls
 // Cleared on analysis complete to force refresh with new data
 let lastFollowedKey: string | null = null;
+let lastHttpCallKey: string | null = null;
 
 interface FunctionImpactData {
   name: string;
@@ -93,6 +94,27 @@ async function getFunctionImpact(
   );
 
   return (result as FunctionImpactData | null) ?? null;
+}
+
+async function getHttpCallAtPosition(
+  lspClient: LanguageClient,
+  params: { uri: string; position: { line: number; character: number } },
+  token?: vscode.CancellationToken
+): Promise<HttpCallAtPositionData | null> {
+  try {
+    const result = await lspClient.sendRequest(
+      ExecuteCommandRequest.type,
+      {
+        command: 'unfault/getHttpCallAtPosition',
+        arguments: [params]
+      },
+      token
+    );
+
+    return (result as HttpCallAtPositionData | null) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -913,6 +935,21 @@ export function activate(context: vscode.ExtensionContext) {
           const doc = e.textEditor.document;
           const position = e.selections[0]?.active ?? new vscode.Position(0, 0);
           console.log('[Unfault] Getting function at position', { line: position.line, char: position.character });
+
+          // Update outbound HTTP call (egress fault injection) on any cursor move.
+          const httpKey = `${doc.uri.toString()}::${position.line}:${position.character}`;
+          if (httpKey !== lastHttpCallKey) {
+            lastHttpCallKey = httpKey;
+            const httpCall = await getHttpCallAtPosition(
+              client,
+              {
+                uri: doc.uri.toString(),
+                position: { line: position.line, character: position.character }
+              },
+              undefined
+            );
+            contextView?.setActiveHttpCall(httpCall);
+          }
           
           const functionName = await getFunctionNameAtPosition(doc, position);
           console.log('[Unfault] Function name:', functionName);

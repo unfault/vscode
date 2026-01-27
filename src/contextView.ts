@@ -81,6 +81,19 @@ export interface FileDependenciesNotification {
   summary: string;
 }
 
+export interface HttpCallAtPositionData {
+  library: string;
+  method: string;
+  url: string | null;
+  urlExpr?: {
+    text: string;
+    kind: string;
+    envVar?: string | null;
+  } | null;
+  startByte: number;
+  endByte: number;
+}
+
 type ServerState = 'starting' | 'running' | 'stopped' | 'error';
 
 type FaultTemplateId =
@@ -122,6 +135,7 @@ interface ContextViewState {
   dependencies: FileDependenciesNotification | null;
   activeImpact: FunctionImpactData | null;
   pinnedImpact: FunctionImpactData | null;
+  activeHttpCall: HttpCallAtPositionData | null;
   fault: FaultPanelState;
 }
 
@@ -133,6 +147,7 @@ export class ContextView implements vscode.WebviewViewProvider {
   private dependencies: FileDependenciesNotification | null = null;
   private activeImpact: FunctionImpactData | null = null;
   private pinnedImpact: FunctionImpactData | null = null;
+  private activeHttpCall: HttpCallAtPositionData | null = null;
 
   private faultState: FaultPanelState;
   private lastFaultTerminal: vscode.Terminal | null = null;
@@ -156,6 +171,7 @@ export class ContextView implements vscode.WebviewViewProvider {
     this.activeEditor = editor;
     this.activeImpact = null;
     this.pinnedImpact = null;
+    this.activeHttpCall = null;
     this.postState();
   }
 
@@ -176,6 +192,11 @@ export class ContextView implements vscode.WebviewViewProvider {
 
   setPinnedImpact(impact: FunctionImpactData | null) {
     this.pinnedImpact = impact;
+    this.postState();
+  }
+
+  setActiveHttpCall(call: HttpCallAtPositionData | null) {
+    this.activeHttpCall = call;
     this.postState();
   }
 
@@ -266,6 +287,13 @@ export class ContextView implements vscode.WebviewViewProvider {
 
     if (!templateId) {
       vscode.window.showWarningMessage('Missing fault template.');
+      return;
+    }
+
+    const mode = message?.mode === 'egress' ? 'egress' : 'ingress';
+
+    if (mode === 'egress') {
+      await this.runEgressFaultInjection(templateId);
       return;
     }
 
@@ -368,6 +396,152 @@ export class ContextView implements vscode.WebviewViewProvider {
       };
       this.postState();
       vscode.window.showErrorMessage(`Failed to start fault proxy: ${msg}`);
+    }
+  }
+
+  private async runEgressFaultInjection(templateId: FaultTemplateId) {
+    const httpCall = this.activeHttpCall;
+    if (!httpCall) {
+      vscode.window.showInformationMessage('Move your cursor onto an outbound HTTP call to run an egress fault injection.');
+      return;
+    }
+
+    const envVar = httpCall.urlExpr?.envVar ?? null;
+    if (!envVar) {
+      vscode.window.showWarningMessage(
+        'This outbound HTTP call does not look like it is driven by an environment variable. Set the target URL via an env var (e.g., os.getenv/process.env) to enable egress fault injection.'
+      );
+      return;
+    }
+
+    // Determine the remote target origin.
+    let remote = '';
+    if (httpCall.url) {
+      remote = this.getRemoteTargetFromBaseUrl(httpCall.url);
+    } else {
+      let envValue = process.env[envVar];
+
+      // If the env var already points to the local proxy, we cannot infer the real remote.
+      if (envValue && (envValue.includes('127.0.0.1:9090') || envValue.includes('localhost:9090'))) {
+        envValue = undefined;
+      }
+
+      if (!envValue) {
+        const entered = await vscode.window.showInputBox({
+          title: 'Remote URL for outbound call',
+          prompt: `Enter the current value of ${envVar} (the real remote URL). We'll start a proxy to that origin, then you can set ${envVar}=http://127.0.0.1:9090 when running your app.`,
+          placeHolder: 'https://api.example.com'
+        });
+        if (!entered) {
+          return;
+        }
+        envValue = entered;
+      }
+
+      remote = this.getRemoteTargetFromBaseUrl(envValue);
+    }
+
+    const baseUrl = this.faultState.baseUrl || 'http://127.0.0.1:8000';
+
+    const impact = this.pinnedImpact ?? this.activeImpact;
+    const route = impact?.routes?.[0];
+    const method = (route?.method ? String(route.method) : 'GET').trim().toUpperCase() || 'GET';
+    const path = route?.path || '/';
+    const appUrl = this.joinUrl(baseUrl, path);
+
+    const titleBits: string[] = [];
+    titleBits.push(this.getFaultTemplateTitle(templateId));
+    titleBits.push(`egress via ${envVar}`);
+    const title = titleBits.join(' - ');
+
+    try {
+      await this.stopActiveFaultProxyIfRunning();
+
+      this.faultState = {
+        ...this.faultState,
+        status: 'running',
+        lastError: undefined
+      };
+      this.postState();
+
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      const config = vscode.workspace.getConfiguration('unfault');
+      const faultPath = config.get('fault.executablePath', 'fault');
+
+      const ok = await this.ensureFaultAvailable(faultPath);
+      if (!ok) {
+        this.faultState = {
+          ...this.faultState,
+          status: 'idle'
+        };
+        this.postState();
+        return;
+      }
+
+      const localPort = 9090;
+      const faultArgs = this.buildFaultRunArgs({
+        templateId,
+        localPort,
+        remote
+      });
+
+      const faultCommand = `${faultPath} ${faultArgs.map(a => (a.includes(' ') ? JSON.stringify(a) : a)).join(' ')}`;
+      const exportCmd = `export ${envVar}=http://127.0.0.1:${localPort}`;
+      const curlCommand = this.buildCurlCommand({ method, url: appUrl });
+      const triggerCommand = `${exportCmd}\n${curlCommand}`;
+
+      const faultTerminal = vscode.window.createTerminal({
+        name: `fault (proxy)`,
+        cwd: workspaceFolder?.uri.fsPath
+      });
+      this.lastFaultTerminal = faultTerminal;
+
+      const triggerTerminal = vscode.window.createTerminal({
+        name: 'curl (trigger app)',
+        cwd: workspaceFolder?.uri.fsPath,
+        location: { parentTerminal: faultTerminal }
+      });
+
+      this.faultState = {
+        ...this.faultState,
+        status: 'running',
+        lastRun: {
+          templateId,
+          title,
+          exitCode: null,
+          startedAtIso: new Date().toISOString(),
+          faultCommand,
+          curlCommand: triggerCommand
+        },
+        lastError: undefined
+      };
+      this.postState();
+
+      faultTerminal.show(true);
+      faultTerminal.sendText(faultCommand, true);
+
+      // Prefill but do not auto-run.
+      triggerTerminal.show(false);
+      triggerTerminal.sendText(triggerCommand, false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.faultState = {
+        ...this.faultState,
+        status: 'error',
+        lastError: msg
+      };
+      this.postState();
+      vscode.window.showErrorMessage(`Failed to start fault proxy: ${msg}`);
+    }
+  }
+
+  private joinUrl(baseUrl: string, path: string): string {
+    try {
+      return new URL(path, baseUrl).toString();
+    } catch {
+      const b = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      const p = path.startsWith('/') ? path : `/${path}`;
+      return `${b}${p}`;
     }
   }
 
@@ -725,6 +899,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       dependencies: this.dependencies,
       activeImpact: this.activeImpact,
       pinnedImpact: this.pinnedImpact,
+      activeHttpCall: this.activeHttpCall,
       fault: this.faultState
     };
   }
@@ -785,6 +960,17 @@ export class ContextView implements vscode.WebviewViewProvider {
       border: 1px solid var(--vscode-widget-border);
       border-radius: 4px;
       padding: 8px 10px;
+    }
+
+    .code {
+      font-family: var(--vscode-editor-font-family);
+      font-size: 11px;
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-widget-border);
+      border-radius: 4px;
+      padding: 6px 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .card-header {
@@ -1351,15 +1537,16 @@ export class ContextView implements vscode.WebviewViewProvider {
     function renderFaultCard(state, impact, funcName) {
       const faultState = state.fault || { baseUrl: 'http://127.0.0.1:8000', status: 'idle' };
       const baseUrl = faultState.baseUrl || 'http://127.0.0.1:8000';
+      const outbound = state.activeHttpCall || null;
 
-      if (!impact) {
+      if (!impact && !outbound) {
         return '<div class="section" id="fault-injection-section">' +
           '<div class="section-label">FAULT INJECTION</div>' +
-          '<div class="card"><div class="muted">Select a function to generate a fault proxy + curl command.</div></div>' +
+          '<div class="card"><div class="muted">Move your cursor inside a function (ingress) or onto an outbound HTTP call (egress).</div></div>' +
           '</div>';
       }
 
-      const route = (impact.routes && impact.routes.length > 0) ? impact.routes[0] : null;
+      const route = (impact && impact.routes && impact.routes.length > 0) ? impact.routes[0] : null;
       const routePath = route && route.path ? String(route.path) : '/';
       const proxyUrl = 'http://127.0.0.1:9090' + (routePath.startsWith('/') ? routePath : ('/' + routePath));
       const remoteOrigin = getRemoteOrigin(baseUrl);
@@ -1383,7 +1570,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       const templateId = knownTemplates.includes(templateIdRaw) ? templateIdRaw : 'latency_tail_normal';
 
       const isRunning = faultState.status === 'running';
-      const canRun = true;
+      const canRun = !!impact;
 
       function opt(id, label) {
         const selected = templateId === id ? ' selected' : '';
@@ -1445,9 +1632,11 @@ export class ContextView implements vscode.WebviewViewProvider {
         return '';
       })();
 
+      const ingressTitle = impact ? (funcName || 'Current function') : 'Ingress (route)';
+
       const body =
         '<div class="card-header">' +
-        '<span class="card-title">' + esc(funcName || 'Current function') + '</span>' +
+        '<span class="card-title">' + esc(ingressTitle) + '</span>' +
         '<span>' + statusPill + '</span>' +
         '</div>' +
         '<div class="form-grid">' +
@@ -1473,17 +1662,73 @@ export class ContextView implements vscode.WebviewViewProvider {
         '</div>' +
         '<div class="button-row">' +
         '<button class="button" data-action="faultRun"' + (canRun ? '' : ' disabled') + '>' + (isRunning ? 'Restart' : 'Run') + '</button>' +
-        '<button class="button" data-action="faultGenerateScenarioFile">Generate scenario file</button>' +
+        '<button class="button" data-action="faultGenerateScenarioFile"' + (canRun ? '' : ' disabled') + '>Generate scenario file</button>' +
         '</div>' +
-        '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' +
-        'This starts a streaming proxy at <span style="font-family: var(--vscode-editor-font-family);">127.0.0.1:9090</span> mapped to <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteOrigin) + '</span> and opens a curl command targeting <span style="font-family: var(--vscode-editor-font-family);">' + esc(proxyUrl) + '</span>.' +
-        '</div>' +
+        (canRun
+          ? ('<div class="muted" style="margin-top: 6px; line-height: 1.3;">' +
+            'This starts a streaming proxy at <span style="font-family: var(--vscode-editor-font-family);">127.0.0.1:9090</span> mapped to <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteOrigin) + '</span> and opens a curl command targeting <span style="font-family: var(--vscode-editor-font-family);">' + esc(proxyUrl) + '</span>.' +
+            '</div>')
+          : ('<div class="muted" style="margin-top: 6px; line-height: 1.3;">Move your cursor inside a function to enable ingress fault injection.</div>')) +
         (isRunning ? '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Selecting a new template and clicking Restart will stop the current proxy and start a new one.</div>' : '') +
         errorLine;
+
+      const egressCard = (() => {
+        if (!outbound) {
+          return '';
+        }
+
+        const envVar = outbound.urlExpr && outbound.urlExpr.envVar ? String(outbound.urlExpr.envVar) : '';
+        const canRunEgress = !!envVar;
+        const urlLabel = outbound.url
+          ? String(outbound.url)
+          : (outbound.urlExpr ? String(outbound.urlExpr.text) : '');
+
+        const remoteHint = outbound.url
+          ? getRemoteOrigin(String(outbound.url))
+          : (envVar ? ('$' + envVar + ' (needs current value)') : '');
+
+        const exportLine = envVar
+          ? ('export ' + envVar + '=http://127.0.0.1:9090')
+          : '';
+
+        let triggerLine = '';
+        if (route && routePath) {
+          try {
+            triggerLine = 'curl -i -X ' + esc(String(route.method || 'GET').toUpperCase()) + ' ' + esc(new URL(routePath, baseUrl).toString());
+          } catch {
+            triggerLine = '';
+          }
+        }
+
+        const steps = (exportLine ? ('<div class="code">' + esc(exportLine) + '</div>') : '') +
+          (triggerLine ? ('<div class="code" style="margin-top: 6px;">' + esc(triggerLine) + '</div>') :
+            '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Then trigger the code path that performs this outbound call.</div>');
+
+        const hint = canRunEgress
+          ? ('Proxy target: <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteHint) + '</span>')
+          : 'Tip: use os.getenv(...) / process.env.* to make the URL configurable.';
+
+        return '<div class="card" style="margin-top: 8px;">' +
+          '<div class="card-header">' +
+          '<span class="card-title">Outbound HTTP call</span>' +
+          '<span class="pill">Egress</span>' +
+          '</div>' +
+          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">' +
+          esc(outbound.library + ' ' + outbound.method + ' ' + urlLabel) +
+          '</div>' +
+          (envVar ? ('<div class="muted" style="margin-top: 6px;">Detected env var: <span style="font-family: var(--vscode-editor-font-family);">' + esc(envVar) + '</span></div>') : '') +
+          '<div class="button-row" style="margin-top: 8px;">' +
+          '<button class="button" data-action="faultRunEgress"' + (canRunEgress ? '' : ' disabled') + '>' + (isRunning ? 'Restart' : 'Run') + '</button>' +
+          '</div>' +
+          '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' + esc(hint) + '</div>' +
+          '<div style="margin-top: 8px;">' + steps + '</div>' +
+          '</div>';
+      })();
 
       return '<div class="section" id="fault-injection-section">' +
         '<div class="section-label">FAULT INJECTION</div>' +
         '<div class="card">' + body + '</div>' +
+        egressCard +
         '</div>';
     }
 
@@ -1897,6 +2142,18 @@ export class ContextView implements vscode.WebviewViewProvider {
           vscode.postMessage({
             command: 'faultRun',
             templateId
+          });
+          break;
+        case 'faultRunEgress':
+          const templateEl2 = document.getElementById('fault-template');
+          if (!templateEl2) {
+            return;
+          }
+          const templateId2 = templateEl2.value;
+          vscode.postMessage({
+            command: 'faultRun',
+            mode: 'egress',
+            templateId: templateId2
           });
           break;
         case 'faultGenerateScenarioFile':
