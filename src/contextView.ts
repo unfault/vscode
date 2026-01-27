@@ -253,6 +253,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           break;
         case 'ready':
           // The webview script is loaded; send the current state now.
+          console.log('[Unfault] Context webview ready');
           this.postState();
           break;
         case 'faultRun':
@@ -1515,8 +1516,16 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
   </style>
 </head>
-<body>
-  <div id="root"></div>
+ <body>
+   <div id="root">
+     <div class="section">
+       <div class="section-label">UNFAULT</div>
+       <div class="card">
+         <div class="muted">Loading context…</div>
+         <div class="muted" style="margin-top: 6px; line-height: 1.3;">If this stays blank, run <strong>Developer: Open Webview Developer Tools</strong> and check the Console.</div>
+       </div>
+     </div>
+   </div>
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
