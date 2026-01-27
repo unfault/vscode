@@ -1971,6 +1971,8 @@ export class ContextView implements vscode.WebviewViewProvider {
       const root = document.getElementById('root');
       if (!root) return;
 
+      try {
+
       // Only show status if not running (error states)
       const serverLine = state.serverState !== 'running'
         ? '<div class="status-line">Server: ' + esc(state.serverState) + '</div>'
@@ -2085,7 +2087,23 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       const faultCard = renderFaultCard(state, active, funcName);
 
-      root.innerHTML = serverLine + fileCard + symbolCard + faultCard;
+        root.innerHTML = serverLine + fileCard + symbolCard + faultCard;
+      } catch (e) {
+        const msg = (e && e.message) ? String(e.message) : String(e);
+        root.innerHTML = '' +
+          '<div class="section">' +
+          '<div class="section-label">UNFAULT</div>' +
+          '<div class="card">' +
+          '<div class="signal warning">' +
+          '<span class="signal-content">Sidebar render error: ' + esc(msg) + '</span>' +
+          '</div>' +
+          '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' +
+          'Open Developer Tools for the webview to see details.' +
+          '</div>' +
+          '</div>' +
+          '</div>';
+        try { console.error('[Unfault webview] render error', e); } catch {}
+      }
     }
 
     function renderCallers(impact) {
