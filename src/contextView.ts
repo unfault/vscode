@@ -990,18 +990,13 @@ export class ContextView implements vscode.WebviewViewProvider {
   }
 
   private getHtml(webview: vscode.Webview): string {
-    // Generate a random alphanumeric nonce (CSP requires proper randomness)
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let nonce = '';
-    for (let i = 0; i < 32; i++) {
-      nonce += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    const nonce = String(Date.now());
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource};" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Unfault: Context</title>
   <style>
@@ -1526,18 +1521,16 @@ export class ContextView implements vscode.WebviewViewProvider {
      <div class="section">
        <div class="section-label">UNFAULT</div>
        <div class="card">
-         <div class="muted">Loading context…</div>
+          <div class="muted">Loading context…</div>
          <div class="muted" style="margin-top: 6px; line-height: 1.3;">If this stays blank, run <strong>Developer: Open Webview Developer Tools</strong> and check the Console.</div>
        </div>
      </div>
    </div>
 
   <script nonce="${nonce}">
-    console.log('[Unfault webview] Script starting');
     const vscode = acquireVsCodeApi();
 
     // Ask the extension for the latest state once the script is ready.
-    console.log('[Unfault webview] Posting ready message');
     vscode.postMessage({ command: 'ready' });
 
     function esc(s) {
@@ -1977,7 +1970,10 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     function joinUrlRaw(baseUrl, path) {
-      const b = String(baseUrl || '').replace(/\/+$/, '');
+      // NOTE: This HTML is produced by a TS template literal. We must escape the
+      // backslash so the webview JS receives the intended regex: /\/+$/. Without
+      // this, the script becomes invalid JS and won't execute.
+      const b = String(baseUrl || '').replace(/\\/+$/, '');
       const p0 = String(path || '');
       const p = p0.startsWith('/') ? p0 : ('/' + p0);
       return b + p;
@@ -2456,11 +2452,9 @@ export class ContextView implements vscode.WebviewViewProvider {
 
     window.addEventListener('message', (event) => {
       const message = event.data;
-      console.log('[Unfault webview] Received message', message?.type);
       if (!message) return;
 
       if (message.type === 'state') {
-        console.log('[Unfault webview] Rendering state', { serverState: message.state?.serverState });
         window.__lastState = message.state;
         render(message.state);
         return;
@@ -2483,7 +2477,6 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
     });
 
-    console.log('[Unfault webview] Script fully loaded and message listeners registered');
   </script>
 </body>
 </html>`;
