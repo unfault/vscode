@@ -34,6 +34,9 @@ let contextView: ContextView | null = null;
 let lastFollowedKey: string | null = null;
 let lastHttpCallKey: string | null = null;
 
+// Debounce cursor-follow updates.
+let followCursorTimer: NodeJS.Timeout | null = null;
+
 interface FunctionImpactData {
   name: string;
   callers: Array<{
@@ -215,6 +218,30 @@ let currentDependencies: FileDependenciesNotification | null = null;
 
 // Track server state
 let serverState: 'starting' | 'running' | 'stopped' | 'error' = 'starting';
+
+async function safeStopClient(reason: string): Promise<void> {
+  if (!client) {
+    return;
+  }
+
+  // Cancel any pending follow-cursor work to avoid requests after stop.
+  if (followCursorTimer) {
+    clearTimeout(followCursorTimer);
+    followCursorTimer = null;
+  }
+  lastFollowedKey = null;
+  lastHttpCallKey = null;
+
+  try {
+    await Promise.race([
+      client.stop(),
+      new Promise<void>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+    ]);
+  } catch (e) {
+    // VS Code will surface this as a fatal extension error if we let it escape.
+    console.warn(`[Unfault] Failed to stop LSP client (${reason}):`, e);
+  }
+}
 
 // Code lens provider instance (for refreshing on analysis complete)
 let codeLensProviderInstance: ImpactCodeLensProvider | null = null;
@@ -889,7 +916,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // Follow cursor and update the context sidebar
-  let followCursorTimer: NodeJS.Timeout | null = null;
+  // followCursorTimer is module-scoped
 
   // NOTE: We intentionally do NOT refresh analysis on document change.
   // Analysis reads files from disk, not from VSCode's in-memory buffer.
@@ -1208,9 +1235,7 @@ export function activate(context: vscode.ExtensionContext) {
     contextView?.setServerState(serverState);
     updateStatusBar();
 
-    if (client) {
-      await client.stop();
-    }
+    await safeStopClient('restart');
 
     const command = getUnfaultPath();
     const args = ["lsp"];
@@ -1247,8 +1272,6 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate(): Thenable<void> | undefined {
-  if (!client) {
-    return undefined;
-  }
-  return client.stop();
+  // Never let VS Code treat shutdown as a fatal extension error.
+  return safeStopClient('deactivate');
 }
