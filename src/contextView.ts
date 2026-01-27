@@ -1285,33 +1285,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       user-select: none;
     }
 
-    .steps {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .step {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      line-height: 1.3;
-    }
-    .step-n {
-      width: 16px;
-      height: 16px;
-      border-radius: 999px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid var(--vscode-widget-border);
-      color: var(--vscode-foreground);
-      font-size: 10px;
-      flex: 0 0 auto;
-    }
-    .step-body {
-      flex: 1;
-    }
+    /* (steps list removed) */
 
     .divider { 
       height: 1px; 
@@ -1684,6 +1658,34 @@ export class ContextView implements vscode.WebviewViewProvider {
       font-size: 10px;
     }
 
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+      user-select: none;
+    }
+    .flow-node {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--vscode-widget-border);
+      background: var(--vscode-editor-inactiveSelectionBackground);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .flow-arrow {
+      opacity: 0.8;
+    }
+    .flow-node.app {
+      border-color: var(--vscode-charts-blue);
+    }
+    .flow-node.proxy {
+      border-color: var(--vscode-charts-yellow);
+    }
+    .flow-node.remote {
+      border-color: var(--vscode-charts-orange);
+    }
+
     @keyframes faultFlash {
       0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
       20% { box-shadow: 0 0 0 2px var(--vscode-focusBorder); }
@@ -2004,10 +2006,8 @@ export class ContextView implements vscode.WebviewViewProvider {
         '<button class="button" data-action="faultRunInbound"' + (canRun ? '' : ' disabled') + '>' + (isRunning ? 'Restart proxy' : 'Start proxy') + '</button>' +
         '<button class="button" data-action="faultGenerateScenarioFile"' + (canRun ? '' : ' disabled') + '>Generate scenario file</button>' +
         '</div>' +
-        '<div class="steps">' +
-        '<div class="step"><span class="step-n">1</span><div class="step-body">Start the proxy for <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteOrigin) + '</span>.</div></div>' +
-        '<div class="step"><span class="step-n">2</span><div class="step-body">Send your request via the proxy: <span style="font-family: var(--vscode-editor-font-family);">' + esc(proxyUrl) + '</span>.</div></div>' +
-        '<div class="step"><span class="step-n">3</span><div class="step-body">Observe behavior: timeouts, retries, fallbacks, error messages.</div></div>' +
+        '<div class="code" style="margin-top: 8px;">' +
+        esc('Remote: ' + remoteOrigin + '\\nProxy URL: ' + proxyUrl) +
         '</div>' +
         '<div class="muted" style="margin-top: 8px; line-height: 1.3;">HTTP error templates are not available in streaming proxy mode.</div>' +
         (isRunning ? '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Restart proxy will stop the current proxy and start a new one.</div>' : '') +
@@ -2038,13 +2038,19 @@ export class ContextView implements vscode.WebviewViewProvider {
           ? String(outbound.url)
           : (outbound.urlExpr ? String(outbound.urlExpr.text) : '');
 
-        const remoteHint = outbound.url
+        const proxyAddress = 'http://127.0.0.1:9090';
+
+        const remoteOrigin = outbound.url
           ? getRemoteOrigin(String(outbound.url))
-          : (envVar ? ('$' + envVar + ' (needs current value)') : '');
+          : (remoteUrlValue ? getRemoteOrigin(remoteUrlValue) : '');
+
+        const remoteLabel = remoteOrigin
+          ? remoteOrigin
+          : (envVar ? ('value of $' + envVar + ' (fill Remote base URL)') : 'remote dependency (fill Env var + Remote base URL)');
 
         const exportLine = envVar
-          ? ('export ' + envVar + '=http://127.0.0.1:9090')
-          : 'export YOUR_DEP_URL=http://127.0.0.1:9090';
+          ? ('export ' + envVar + '=' + proxyAddress)
+          : ('export YOUR_DEP_URL=' + proxyAddress);
 
         let triggerLine = '';
         if (route && routePath) {
@@ -2057,17 +2063,18 @@ export class ContextView implements vscode.WebviewViewProvider {
           }
         }
 
-        const steps =
-          '<div class="steps">' +
-          '<div class="step"><span class="step-n">1</span><div class="step-body">Start the proxy for the remote dependency: <span style="font-family: var(--vscode-editor-font-family);">' + esc(remoteHint || 'your dependency origin') + '</span>.</div></div>' +
-          '<div class="step"><span class="step-n">2</span><div class="step-body">Point your app at the proxy (restart required):</div></div>' +
-          '<div class="code" style="margin-left: 24px;">' + esc(exportLine) + '</div>' +
-          '<div class="step"><span class="step-n">3</span><div class="step-body">Trigger the code path that performs the outbound call.' + (triggerLine ? ' (Example curl provided.)' : '') + '</div></div>' +
-          (triggerLine ? ('<div class="code" style="margin-left: 24px;">' + esc(triggerLine) + '</div>') : '') +
-          '</div>';
+        const runInfo =
+          '<div class="code" style="margin-top: 8px;">' +
+          esc('Proxy: ' + proxyAddress + '\\nForwarding to: ' + remoteLabel + '\\n' + exportLine) +
+          '</div>' +
+          (triggerLine ? ('<div class="code" style="margin-top: 6px;">' + esc(triggerLine) + '</div>') : '');
 
-        const hint =
-          'App → proxy → remote (tests resilience to dependency failures).';
+        const why =
+          'Outbound fault injection shows how much your remote dependencies control your behavior (timeouts, retries, fallbacks, queueing).';
+
+        const how =
+          'We start a local proxy that injects faults, then forwards traffic to ' + remoteLabel + '. ' +
+          'To route your app through the proxy, set ' + (envVar ? ('$' + envVar) : 'your dependency URL env var') + ' to ' + proxyAddress + ' and restart your app.';
 
         const envVarField =
           '<div class="field">' +
@@ -2077,17 +2084,28 @@ export class ContextView implements vscode.WebviewViewProvider {
 
         const remoteUrlField =
           '<div class="field">' +
-          '<label for="egress-remote-url">Remote URL (current value)</label>' +
+          '<label for="egress-remote-url">Remote base URL (current value)</label>' +
           '<input class="input" id="egress-remote-url" placeholder="https://api.example.com" value="' + esc(remoteUrlValue) + '" />' +
-          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">Used to start the proxy. Cached by env var name.</div>' +
+          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">The proxy forwards to this URL. Cached by env var name.</div>' +
+          '</div>';
+
+        const flow =
+          '<div class="flow">' +
+          '<span class="flow-node app">app</span>' +
+          '<span class="flow-arrow">→</span>' +
+          '<span class="flow-node proxy">fault proxy</span>' +
+          '<span class="flow-arrow">→</span>' +
+          '<span class="flow-node remote">remote</span>' +
           '</div>';
 
         return '<div class="card" style="margin-top: 8px;">' +
           '<div class="card-header">' +
           '<span class="card-title">Outbound fault injection</span>' +
-          '<span class="pill">Outbound</span>' +
+          '<span class="pill">Egress</span>' +
           '</div>' +
-          '<div class="muted" style="margin-top: 4px; line-height: 1.3;">' + esc(hint) + '</div>' +
+          '<div class="muted" style="margin-top: 4px; line-height: 1.35;">' + esc(why) + '</div>' +
+          flow +
+          '<div class="muted" style="margin-top: 6px; line-height: 1.35;">' + esc(how) + '</div>' +
           '<div class="muted" style="margin-top: 4px; line-height: 1.3;">' +
           esc(outbound.library + ' ' + outbound.method + ' ' + urlLabel) +
           '</div>' +
@@ -2124,7 +2142,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           '<div class="button-row" style="margin-top: 8px;">' +
           '<button class="button" data-action="faultRunOutbound"' + (canRunEgress ? '' : ' disabled') + '>' + (isRunning ? 'Restart proxy' : 'Start proxy') + '</button>' +
           '</div>' +
-          '<div style="margin-top: 8px;">' + steps + '</div>' +
+          runInfo +
           '</div>';
       })();
 
@@ -2185,10 +2203,10 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     function joinUrlRaw(baseUrl, path) {
-      // NOTE: This HTML is produced by a TS template literal. We must escape the
-      // backslash so the webview JS receives the intended regex: /\/+$/. Without
-      // this, the script becomes invalid JS and won't execute.
-      const b = String(baseUrl || '').replace(/\\/+$/, '');
+      let b = String(baseUrl || '');
+      while (b.endsWith('/')) {
+        b = b.slice(0, -1);
+      }
       const p0 = String(path || '');
       const p = p0.startsWith('/') ? p0 : ('/' + p0);
       return b + p;
