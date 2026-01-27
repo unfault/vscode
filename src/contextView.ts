@@ -406,10 +406,22 @@ export class ContextView implements vscode.WebviewViewProvider {
       return;
     }
 
-    const envVar = httpCall.urlExpr?.envVar ?? null;
+    let envVar = httpCall.urlExpr?.envVar ?? null;
+    if (!envVar && httpCall.urlExpr?.text) {
+      envVar = this.inferEnvVarFromTemplateText(httpCall.urlExpr.text);
+    }
+    if (!envVar) {
+      envVar =
+        (await vscode.window.showInputBox({
+          title: 'Env var to override',
+          prompt:
+            'Enter the environment variable name that controls the outbound URL (e.g., KITCHEN_URL).',
+          placeHolder: 'KITCHEN_URL'
+        })) || null;
+    }
     if (!envVar) {
       vscode.window.showWarningMessage(
-        'This outbound HTTP call does not look like it is driven by an environment variable. Set the target URL via an env var (e.g., os.getenv/process.env) to enable egress fault injection.'
+        'No env var selected. To enable egress fault injection, make the outbound URL configurable via an env var (os.getenv/process.env) or provide an env var name here.'
       );
       return;
     }
@@ -555,6 +567,27 @@ export class ContextView implements vscode.WebviewViewProvider {
       const p = path.startsWith('/') ? path : `/${path}`;
       return `${b}${p}`;
     }
+  }
+
+  private inferEnvVarFromTemplateText(text: string): string | null {
+    // Best-effort: support Python f-strings ({NAME}) and JS template literals (${NAME}).
+    const vars = new Set<string>();
+
+    const pyRe = /\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
+    const jsRe = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
+
+    let m: RegExpExecArray | null;
+    while ((m = pyRe.exec(text)) !== null) {
+      vars.add(m[1]);
+    }
+    while ((m = jsRe.exec(text)) !== null) {
+      vars.add(m[1]);
+    }
+
+    if (vars.size === 1) {
+      return Array.from(vars)[0] ?? null;
+    }
+    return null;
   }
 
   private async stopActiveFaultProxyIfRunning(): Promise<void> {
@@ -1689,7 +1722,11 @@ export class ContextView implements vscode.WebviewViewProvider {
           return '';
         }
 
-        const envVar = outbound.urlExpr && outbound.urlExpr.envVar ? String(outbound.urlExpr.envVar) : '';
+        const detectedEnvVar = outbound.urlExpr && outbound.urlExpr.envVar ? String(outbound.urlExpr.envVar) : '';
+        const inferredEnvVar = (!detectedEnvVar && outbound.urlExpr && outbound.urlExpr.text)
+          ? inferEnvVarFromTemplateText(String(outbound.urlExpr.text))
+          : '';
+        const envVar = detectedEnvVar || inferredEnvVar;
         const canRunEgress = !!envVar;
         const urlLabel = outbound.url
           ? String(outbound.url)
@@ -1728,7 +1765,14 @@ export class ContextView implements vscode.WebviewViewProvider {
           '<div class="muted" style="margin-top: 4px; line-height: 1.3;">' +
           esc(outbound.library + ' ' + outbound.method + ' ' + urlLabel) +
           '</div>' +
-          (envVar ? ('<div class="muted" style="margin-top: 6px;">Detected env var: <span style="font-family: var(--vscode-editor-font-family);">' + esc(envVar) + '</span></div>') : '') +
+          (envVar ? (
+            '<div class="muted" style="margin-top: 6px;">' +
+            (detectedEnvVar
+              ? 'Detected env var: '
+              : 'Inferred env var: ') +
+            '<span style="font-family: var(--vscode-editor-font-family);">' + esc(envVar) + '</span>' +
+            '</div>'
+          ) : '') +
           '<div class="button-row" style="margin-top: 8px;">' +
           '<button class="button" data-action="faultRunEgress"' + (canRunEgress ? '' : ' disabled') + '>' + (isRunning ? 'Restart' : 'Run') + '</button>' +
           '</div>' +
@@ -1742,6 +1786,21 @@ export class ContextView implements vscode.WebviewViewProvider {
         '<div class="card">' + body + '</div>' +
         egressCard +
         '</div>';
+    }
+
+    function inferEnvVarFromTemplateText(text) {
+      // Best-effort: Python f-strings use {NAME}, JS template literals use \${NAME}.
+      const vars = new Set();
+      const pyRe = /\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
+      const jsRe = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
+      let m;
+      while ((m = pyRe.exec(text)) !== null) {
+        vars.add(m[1]);
+      }
+      while ((m = jsRe.exec(text)) !== null) {
+        vars.add(m[1]);
+      }
+      return vars.size === 1 ? Array.from(vars)[0] : '';
     }
 
     function render(state) {
