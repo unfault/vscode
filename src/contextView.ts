@@ -156,6 +156,8 @@ export class ContextView implements vscode.WebviewViewProvider {
 
   private faultState: FaultPanelState;
   private lastFaultTerminal: vscode.Terminal | null = null;
+  private lastIngressCurlTerminal: vscode.Terminal | null = null;
+  private lastEgressInstructionsTerminal: vscode.Terminal | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -443,7 +445,24 @@ export class ContextView implements vscode.WebviewViewProvider {
     });
   }
 
+  private faultRunInProgress = false;
+
   private async runFaultFromWebview(message: any) {
+    // Guard against duplicate invocations (e.g., double-click or webview re-render).
+    if (this.faultRunInProgress) {
+      console.log('[Unfault] runFaultFromWebview already in progress, ignoring');
+      return;
+    }
+    this.faultRunInProgress = true;
+
+    try {
+      await this.doRunFaultFromWebview(message);
+    } finally {
+      this.faultRunInProgress = false;
+    }
+  }
+
+  private async doRunFaultFromWebview(message: any) {
     const rawTemplateId = message?.templateId as FaultTemplateId | string | undefined;
     if (!rawTemplateId) {
       vscode.window.showWarningMessage('Missing fault template.');
@@ -520,17 +539,22 @@ export class ContextView implements vscode.WebviewViewProvider {
       const faultCommand = `${faultPath} ${faultArgs.map(a => (a.includes(' ') ? JSON.stringify(a) : a)).join(' ')}`;
       const curlCommand = this.buildCurlCommand({ method, url: curlUrl });
 
+      // isTransient: true prevents shell integration from initializing, which
+      // avoids the duplicate sendText bug (vscode#208736).
       const faultTerminal = vscode.window.createTerminal({
         name: `fault (proxy)`,
-        cwd: workspaceFolder?.uri.fsPath
+        cwd: workspaceFolder?.uri.fsPath,
+        env: { VSCODE_SHELL_INTEGRATION: '0' }
       });
       this.lastFaultTerminal = faultTerminal;
 
       const curlTerminal = vscode.window.createTerminal({
         name: 'curl (via fault)',
         cwd: workspaceFolder?.uri.fsPath,
-        location: { parentTerminal: faultTerminal }
+        location: { parentTerminal: faultTerminal },
+        env: { VSCODE_SHELL_INTEGRATION: '0' }
       });
+      this.lastIngressCurlTerminal = curlTerminal;
 
       this.faultState = {
         ...this.faultState,
@@ -556,15 +580,8 @@ export class ContextView implements vscode.WebviewViewProvider {
         // ignore
       }
 
-      faultTerminal.show(false);
-      faultTerminal.sendText(faultCommand, true);
-
-      // Don't run the curl command automatically, just prefill it.
-      // Use preserveFocus=false so the terminal panel re-opens if it was closed.
-      curlTerminal.show(false);
-      // Give the shell a moment to initialize; otherwise VS Code can echo/paste oddly.
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      curlTerminal.sendText(curlCommand, false);
+      await this.prefillTerminal(faultTerminal, faultCommand, true);
+      await this.prefillTerminal(curlTerminal, curlCommand);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.faultState = {
@@ -684,15 +701,18 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       const faultTerminal = vscode.window.createTerminal({
         name: `fault (proxy)`,
-        cwd: workspaceFolder?.uri.fsPath
+        cwd: workspaceFolder?.uri.fsPath,
+        env: { VSCODE_SHELL_INTEGRATION: '0' }
       });
       this.lastFaultTerminal = faultTerminal;
 
       const triggerTerminal = vscode.window.createTerminal({
         name: 'egress (instructions)',
         cwd: workspaceFolder?.uri.fsPath,
-        location: { parentTerminal: faultTerminal }
+        location: { parentTerminal: faultTerminal },
+        env: { VSCODE_SHELL_INTEGRATION: '0' }
       });
+      this.lastEgressInstructionsTerminal = triggerTerminal;
 
       this.faultState = {
         ...this.faultState,
@@ -715,17 +735,14 @@ export class ContextView implements vscode.WebviewViewProvider {
         // ignore
       }
 
-      faultTerminal.show(false);
-      faultTerminal.sendText(faultCommand, true);
+      await this.prefillTerminal(faultTerminal, faultCommand, true);
 
       vscode.window.showInformationMessage(
         `Egress fault proxy started. Set ${envVar}=http://127.0.0.1:${localPort} in your app's environment (restart required).`
       );
 
       // Prefill but do not auto-run.
-      triggerTerminal.show(false);
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      triggerTerminal.sendText(instructions, false);
+      await this.prefillTerminal(triggerTerminal, instructions);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.faultState = {
@@ -755,6 +772,13 @@ export class ContextView implements vscode.WebviewViewProvider {
       const p = path.startsWith('/') ? path : `/${path}`;
       return `${b}${p}`;
     }
+  }
+
+  private async prefillTerminal(terminal: vscode.Terminal, text: string, run = false): Promise<void> {
+    terminal.show(false);
+    // Give the shell a moment to initialize.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    terminal.sendText(text, run);
   }
 
   private inferEnvVarFromTemplateText(text: string): string | null {
@@ -823,6 +847,22 @@ export class ContextView implements vscode.WebviewViewProvider {
     }
 
     this.lastFaultTerminal = null;
+
+    // Child terminals aren't automatically disposed when the parent is disposed.
+    // If they stick around, sendText can append to an existing prompt buffer,
+    // which looks like duplicated prefills.
+    try {
+      this.lastIngressCurlTerminal?.dispose();
+    } catch {
+      // ignore
+    }
+    try {
+      this.lastEgressInstructionsTerminal?.dispose();
+    } catch {
+      // ignore
+    }
+    this.lastIngressCurlTerminal = null;
+    this.lastEgressInstructionsTerminal = null;
   }
 
   private async ensureFaultAvailable(faultPath: string): Promise<boolean> {
