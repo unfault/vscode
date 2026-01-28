@@ -563,7 +563,7 @@ export class ContextView implements vscode.WebviewViewProvider {
       // Use preserveFocus=false so the terminal panel re-opens if it was closed.
       curlTerminal.show(false);
       // Give the shell a moment to initialize; otherwise VS Code can echo/paste oddly.
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await new Promise((resolve) => setTimeout(resolve, 300));
       curlTerminal.sendText(curlCommand, false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -724,7 +724,7 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       // Prefill but do not auto-run.
       triggerTerminal.show(false);
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await new Promise((resolve) => setTimeout(resolve, 300));
       triggerTerminal.sendText(instructions, false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
