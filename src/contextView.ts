@@ -548,12 +548,22 @@ export class ContextView implements vscode.WebviewViewProvider {
       this.postState();
 
       // Run the proxy; keep focus for the curl terminal.
-      faultTerminal.show(true);
+      // Users often close the terminal panel; always re-open it.
+      // We intentionally focus the terminal so it's visible.
+      try {
+        await vscode.commands.executeCommand('workbench.action.terminal.show');
+      } catch {
+        // ignore
+      }
+
+      faultTerminal.show(false);
       faultTerminal.sendText(faultCommand, true);
 
       // Don't run the curl command automatically, just prefill it.
       // Use preserveFocus=false so the terminal panel re-opens if it was closed.
       curlTerminal.show(false);
+      // Give the shell a moment to initialize; otherwise VS Code can echo/paste oddly.
+      await new Promise((resolve) => setTimeout(resolve, 150));
       curlTerminal.sendText(curlCommand, false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -668,12 +678,9 @@ export class ContextView implements vscode.WebviewViewProvider {
       // For egress, the env var must be applied to the *application process* (restart required).
       // We still optionally provide a curl command to trigger the code path once the app is running.
       const curlCommand = appUrl && method ? this.buildCurlCommand({ method, url: appUrl }) : null;
-      const instructions = [
-        exportCmd,
-        '# Restart your app process so it picks up the env var.',
-        '# Then trigger the code path that performs the outbound call.',
-        curlCommand ? curlCommand : '# (No route selected in the sidebar; trigger the outbound call however you normally do.)'
-      ].join('\n');
+      // Keep this to a single line so we don't accidentally execute multiple lines.
+      // (Terminal.sendText with embedded newlines behaves like pressing Enter.)
+      const instructions = exportCmd;
 
       const faultTerminal = vscode.window.createTerminal({
         name: `fault (proxy)`,
@@ -702,7 +709,13 @@ export class ContextView implements vscode.WebviewViewProvider {
       };
       this.postState();
 
-      faultTerminal.show(true);
+      try {
+        await vscode.commands.executeCommand('workbench.action.terminal.show');
+      } catch {
+        // ignore
+      }
+
+      faultTerminal.show(false);
       faultTerminal.sendText(faultCommand, true);
 
       vscode.window.showInformationMessage(
@@ -711,6 +724,7 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       // Prefill but do not auto-run.
       triggerTerminal.show(false);
+      await new Promise((resolve) => setTimeout(resolve, 150));
       triggerTerminal.sendText(instructions, false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
