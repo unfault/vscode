@@ -506,7 +506,7 @@ export class ContextView implements vscode.WebviewViewProvider {
     const curlUrl = `http://127.0.0.1:9090${path.startsWith('/') ? path : `/${path}`}`;
     const method = (route?.method ? String(route.method) : 'GET').trim().toUpperCase() || 'GET';
     try {
-      await this.stopActiveFaultProxyIfRunning();
+      await this.stopActiveFaultProxyIfRunning(true);
 
       this.faultState = {
         ...this.faultState,
@@ -541,20 +541,27 @@ export class ContextView implements vscode.WebviewViewProvider {
 
       // isTransient: true prevents shell integration from initializing, which
       // avoids the duplicate sendText bug (vscode#208736).
-      const faultTerminal = vscode.window.createTerminal({
-        name: `fault (proxy)`,
-        cwd: workspaceFolder?.uri.fsPath,
-        env: { VSCODE_SHELL_INTEGRATION: '0' }
-      });
-      this.lastFaultTerminal = faultTerminal;
+      let faultTerminal = this.lastFaultTerminal;
+      if (!faultTerminal || faultTerminal.exitStatus) {
+        faultTerminal = vscode.window.createTerminal({
+          name: `fault (proxy)`,
+          cwd: workspaceFolder?.uri.fsPath,
+          env: { VSCODE_SHELL_INTEGRATION: '0' }
+        });
+        this.lastFaultTerminal = faultTerminal;
+      }
 
-      const curlTerminal = vscode.window.createTerminal({
-        name: 'curl (via fault)',
-        cwd: workspaceFolder?.uri.fsPath,
-        location: { parentTerminal: faultTerminal },
-        env: { VSCODE_SHELL_INTEGRATION: '0' }
-      });
-      this.lastIngressCurlTerminal = curlTerminal;
+      let curlTerminal = this.lastIngressCurlTerminal;
+      if (!curlTerminal || curlTerminal.exitStatus) {
+        const location = this.lastFaultTerminal ? { parentTerminal: this.lastFaultTerminal } : undefined;
+        curlTerminal = vscode.window.createTerminal({
+          name: 'curl (via fault)',
+          cwd: workspaceFolder?.uri.fsPath,
+          location,
+          env: { VSCODE_SHELL_INTEGRATION: '0' }
+        });
+        this.lastIngressCurlTerminal = curlTerminal;
+      }
 
       this.faultState = {
         ...this.faultState,
@@ -576,6 +583,15 @@ export class ContextView implements vscode.WebviewViewProvider {
       // We intentionally focus the terminal so it's visible.
       try {
         await vscode.commands.executeCommand('workbench.action.terminal.show');
+      } catch {
+        // ignore
+      }
+
+      // Clear the fault terminal before running the new command so it looks clean.
+      // We use workbench.action.terminal.clear to clear the buffer, not just the screen.
+      faultTerminal.show(false);
+      try {
+        await vscode.commands.executeCommand('workbench.action.terminal.clear');
       } catch {
         // ignore
       }
@@ -820,25 +836,29 @@ export class ContextView implements vscode.WebviewViewProvider {
     return null;
   }
 
-  private async stopActiveFaultProxyIfRunning(): Promise<void> {
+  private async stopActiveFaultProxyIfRunning(preserveTerminals = false): Promise<void> {
     const terminal = this.lastFaultTerminal;
     if (!terminal) {
       return;
     }
 
     // If we already have an exit status, the proxy isn't running anymore.
-    if (terminal.exitStatus) {
+    if (!terminal.exitStatus) {
+      // Best effort: interrupt then dispose (frees port 9090).
+      try {
+        terminal.sendText('\u0003', false);
+      } catch {
+        // ignore
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 300)); // Increased wait for process cleanup
+    }
+
+    if (preserveTerminals) {
+      // Don't dispose the terminals; we'll reuse them.
+      // We assume the Ctrl+C above successfully stopped the process.
       return;
     }
-
-    // Best effort: interrupt then dispose (frees port 9090).
-    try {
-      terminal.sendText('\u0003', false);
-    } catch {
-      // ignore
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 150));
 
     try {
       terminal.dispose();
@@ -1938,155 +1958,12 @@ export class ContextView implements vscode.WebviewViewProvider {
       }
 
       const route = (impact && impact.routes && impact.routes.length > 0) ? impact.routes[0] : null;
-      const routePath = route && route.path ? String(route.path) : '/';
-      const proxyUrl = 'http://127.0.0.1:9090' + (routePath.startsWith('/') ? routePath : ('/' + routePath));
-      const remoteOrigin = getRemoteOrigin(baseUrl);
-
-      const knownTemplates = [
-        'latency_tail_normal',
-        'latency_tail_spikes_pareto',
-        'latency_brownout_window',
-        'jitter_light_ingress',
-        'jitter_bidirectional',
-        'bandwidth_server_ingress_64_kbps',
-        'bandwidth_client_both_48_kbps_plus_latency',
-        'mobile_edge_3g',
-        'packet_loss_constant',
-        'packet_loss_burst',
-        'blackhole_constant',
-        'blackhole_window'
-      ];
-
-      function normalizeTemplateId(raw) {
-        const id = raw || 'latency_tail_normal';
-        return knownTemplates.includes(id) ? id : 'latency_tail_normal';
-      }
-
-      const inboundTemplateId = normalizeTemplateId(faultForm.inboundTemplateId || faultForm.templateId);
-      const outboundTemplateId = normalizeTemplateId(faultForm.outboundTemplateId || faultForm.templateId);
-
-      const isRunning = faultState.status === 'running';
-      const canRun = !!impact;
-
-      function opt(selectedId, id, label) {
-        const selected = selectedId === id ? ' selected' : '';
-        return '<option value="' + esc(id) + '"' + selected + '>' + esc(label) + '</option>';
-      }
-
-      const statusPill = (() => {
-        if (faultState.status === 'running') {
-          return '<span class="pill">Running...</span>';
-        }
-        if (faultState.lastRun) {
-          const code = faultState.lastRun.exitCode;
-          return '<span class="pill">Exit ' + esc(code === null ? 'unknown' : String(code)) + '</span>';
-        }
-        return '<span class="pill">Idle</span>';
-      })();
-
-      const errorLine = faultState.lastError
-        ? '<div class="signal warning" style="margin-top: 8px;"><span class="signal-content">' + esc(faultState.lastError) + '</span></div>'
-        : '';
-
-      function templateIntentFor(templateId) {
-        if (templateId === 'latency_tail_normal') {
-          return 'Intent: expose timeout handling and tail-latency amplification (steady slow upstream).';
-        }
-        if (templateId === 'latency_tail_spikes_pareto') {
-          return 'Intent: simulate rare latency spikes to validate p99 behavior and backpressure.';
-        }
-        if (templateId === 'latency_brownout_window') {
-          return 'Intent: simulate a brownout window and validate degradation mode + recovery.';
-        }
-        if (templateId === 'jitter_light_ingress') {
-          return 'Intent: introduce variable delays to test jitter sensitivity and retry timing.';
-        }
-        if (templateId === 'jitter_bidirectional') {
-          return 'Intent: stress interactive flows with jitter both ways.';
-        }
-        if (templateId === 'bandwidth_server_ingress_64_kbps') {
-          return 'Intent: throttle downloads/responses to validate streaming, pagination, and timeouts.';
-        }
-        if (templateId === 'bandwidth_client_both_48_kbps_plus_latency') {
-          return 'Intent: simulate a slow client link to validate UX and payload sizing.';
-        }
-        if (templateId === 'mobile_edge_3g') {
-          return 'Intent: emulate a sluggish mobile connection (low bandwidth + latency + jitter).';
-        }
-        if (templateId === 'packet_loss_constant') {
-          return 'Intent: simulate flaky networks to reveal retry storms and hidden timeouts.';
-        }
-        if (templateId === 'packet_loss_burst') {
-          return 'Intent: simulate intermittent loss bursts to validate resilience and recovery.';
-        }
-        if (templateId === 'blackhole_constant') {
-          return 'Intent: force a hang/timeout path to validate cancellation and circuit breakers.';
-        }
-        if (templateId === 'blackhole_window') {
-          return 'Intent: simulate a temporary outage and verify recovery behavior.';
-        }
-        return '';
-      }
-
       const inboundHelp = 'Inbound fault injection runs a local proxy between your client (curl) and your app server. Use it to validate timeouts, retries, and error handling at the API boundary.';
       const outboundHelp = 'Outbound fault injection runs a local proxy between your app and a remote HTTP dependency. Set the dependency URL env var to the proxy address and restart your app.';
 
-      const inboundTitle = impact ? (funcName || 'Current function') : 'Current function';
-
-      const inboundWhy =
-        'Inbound fault injection helps you see how your API behaves for clients when the network is slow, lossy, or unstable.';
-
-      const inboundHow =
-        'We start a local fault proxy in front of your app at ' + remoteOrigin + '. ' +
-        'Send requests to the proxy URL to inject faults (your app still receives the same route).';
-
-      const inboundFlow =
-        '<div class="flow">' +
-        '<span class="flow-node client">client</span>' +
-        '<span class="flow-arrow">→</span>' +
-        '<span class="flow-node proxy">fault proxy</span>' +
-        '<span class="flow-arrow">→</span>' +
-        '<span class="flow-node app">app</span>' +
-        '</div>';
-
-      const inboundBody =
-        '<div class="card-header">' +
-        '<span class="card-title">' + esc(inboundTitle) + '</span>' +
-        '<span>' + statusPill + '</span>' +
-        '</div>' +
-        '<div class="muted" style="margin-top: 4px; line-height: 1.35;">' + esc(inboundWhy) + '</div>' +
-        inboundFlow +
-        '<div class="muted" style="margin-top: 6px; line-height: 1.35;">' + esc(inboundHow) + '</div>' +
-        '<div class="form-grid" style="margin-top: 8px;">' +
-        '<div class="field">' +
-        '<label for="fault-template-inbound">Fault type</label>' +
-        '<select class="select" id="fault-template-inbound">' +
-        opt(inboundTemplateId, 'latency_tail_normal', 'Latency: tail (350ms +/- 50ms)') +
-        opt(inboundTemplateId, 'latency_tail_spikes_pareto', 'Latency: tail spikes (pareto)') +
-        opt(inboundTemplateId, 'latency_brownout_window', 'Latency: brownout window (sched)') +
-        opt(inboundTemplateId, 'jitter_light_ingress', 'Jitter: light ingress (30ms @ 5Hz)') +
-        opt(inboundTemplateId, 'jitter_bidirectional', 'Jitter: bidirectional (30ms @ 8Hz)') +
-        opt(inboundTemplateId, 'bandwidth_server_ingress_64_kbps', 'Bandwidth: server ingress (64 KBps)') +
-        opt(inboundTemplateId, 'bandwidth_client_both_48_kbps_plus_latency', 'Bandwidth: client both (48 KBps) + latency') +
-        opt(inboundTemplateId, 'mobile_edge_3g', 'Mobile edge: 48 KBps + 200ms + jitter') +
-        opt(inboundTemplateId, 'packet_loss_constant', 'Packet loss: constant') +
-        opt(inboundTemplateId, 'packet_loss_burst', 'Packet loss: burst window (sched)') +
-        opt(inboundTemplateId, 'blackhole_constant', 'Blackhole: constant') +
-        opt(inboundTemplateId, 'blackhole_window', 'Blackhole: outage window (sched)') +
-        '</select>' +
-        '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' + esc(templateIntentFor(inboundTemplateId)) + '</div>' +
-        '</div>' +
-        '</div>' +
-        '<div class="button-row" style="margin-top: 8px;">' +
-        '<button class="button" data-action="faultRunInbound"' + (canRun ? '' : ' disabled') + '>' + (isRunning ? 'Restart proxy' : 'Start proxy') + '</button>' +
-        '<button class="button" data-action="faultGenerateScenarioFile"' + (canRun ? '' : ' disabled') + '>Generate scenario file</button>' +
-        '</div>' +
-        '<div class="code" style="margin-top: 8px;">' +
-        esc('Proxy URL (send requests here): ' + proxyUrl + '\\nForwards to: ' + remoteOrigin) +
-        '</div>' +
-        '<div class="muted" style="margin-top: 8px; line-height: 1.3;">HTTP error templates are not available in streaming proxy mode.</div>' +
-        (isRunning ? '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Restart proxy will stop the current proxy and start a new one.</div>' : '') +
-        errorLine;
+      // Only show full inbound controls if the function is reachable from a route.
+      // Otherwise, show the placeholder (or nothing if outbound is active).
+      const showInbound = !!route;
 
       const egressCard = (() => {
         if (!outbound) {
@@ -2213,20 +2090,18 @@ export class ContextView implements vscode.WebviewViewProvider {
           '</div>';
       })();
 
-      const inboundSection = '<div class="section" id="fault-injection-inbound">' +
-        '<div class="section-label">INBOUND FAULT INJECTION <span class="help" title="' + esc(inboundHelp) + '">?</span></div>' +
-        '<div class="card">' + inboundBody + '</div>' +
-        '</div>';
-
       const outboundSection = egressCard
         ? ('<div class="section" id="fault-injection-outbound">' +
           '<div class="section-label">OUTBOUND FAULT INJECTION <span class="help" title="' + esc(outboundHelp) + '">?</span></div>' +
           egressCard +
           '</div>')
-        : ('<div class="section" id="fault-injection-outbound">' +
-          '<div class="section-label">OUTBOUND FAULT INJECTION <span class="help" title="' + esc(outboundHelp) + '">?</span></div>' +
-          '<div class="card"><div class="muted">Move your cursor onto an outbound HTTP call to enable outbound injection.</div></div>' +
-          '</div>');
+        : ''; // Hide outbound section completely if not hovering an HTTP call
+
+      // Only render the inbound section if it's reachable or we have active inbound fault context
+      const inboundSection = showInbound ? ('<div class="section" id="fault-injection-inbound">' +
+        '<div class="section-label">INBOUND FAULT INJECTION <span class="help" title="' + esc(inboundHelp) + '">?</span></div>' +
+        '<div class="card">' + inboundBody + '</div>' +
+        '</div>') : '';
 
       return inboundSection + outboundSection;
     }
