@@ -157,7 +157,7 @@ export class ContextView implements vscode.WebviewViewProvider {
   private faultState: FaultPanelState;
   private lastFaultTerminal: vscode.Terminal | null = null;
   private lastIngressCurlTerminal: vscode.Terminal | null = null;
-  private lastEgressInstructionsTerminal: vscode.Terminal | null = null;
+  private lastEgressTriggerTerminal: vscode.Terminal | null = null;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -675,7 +675,8 @@ export class ContextView implements vscode.WebviewViewProvider {
     const title = titleBits.join(' - ');
 
     try {
-      await this.stopActiveFaultProxyIfRunning();
+      // Preserve existing split terminals so users keep their curl history.
+      await this.stopActiveFaultProxyIfRunning(true);
 
       this.faultState = {
         ...this.faultState,
@@ -709,26 +710,30 @@ export class ContextView implements vscode.WebviewViewProvider {
       const exportCmd = `export ${envVar}=http://127.0.0.1:${localPort}`;
 
       // For egress, the env var must be applied to the *application process* (restart required).
-      // We still optionally provide a curl command to trigger the code path once the app is running.
+      // We optionally provide a curl command to trigger the relevant app route once the app is running.
       const curlCommand = appUrl && method ? this.buildCurlCommand({ method, url: appUrl }) : null;
-      // Keep this to a single line so we don't accidentally execute multiple lines.
-      // (Terminal.sendText with embedded newlines behaves like pressing Enter.)
-      const instructions = exportCmd;
 
-      const faultTerminal = vscode.window.createTerminal({
-        name: `fault (proxy)`,
-        cwd: workspaceFolder?.uri.fsPath,
-        env: { VSCODE_SHELL_INTEGRATION: '0' }
-      });
-      this.lastFaultTerminal = faultTerminal;
+      let faultTerminal = this.lastFaultTerminal;
+      if (!faultTerminal || faultTerminal.exitStatus) {
+        faultTerminal = vscode.window.createTerminal({
+          name: `fault (proxy)`,
+          cwd: workspaceFolder?.uri.fsPath,
+          env: { VSCODE_SHELL_INTEGRATION: '0' }
+        });
+        this.lastFaultTerminal = faultTerminal;
+      }
 
-      const triggerTerminal = vscode.window.createTerminal({
-        name: 'egress (instructions)',
-        cwd: workspaceFolder?.uri.fsPath,
-        location: { parentTerminal: faultTerminal },
-        env: { VSCODE_SHELL_INTEGRATION: '0' }
-      });
-      this.lastEgressInstructionsTerminal = triggerTerminal;
+      let triggerTerminal = this.lastEgressTriggerTerminal;
+      if (!triggerTerminal || triggerTerminal.exitStatus) {
+        const location = this.lastFaultTerminal ? { parentTerminal: this.lastFaultTerminal } : undefined;
+        triggerTerminal = vscode.window.createTerminal({
+          name: 'curl (trigger app)',
+          cwd: workspaceFolder?.uri.fsPath,
+          location,
+          env: { VSCODE_SHELL_INTEGRATION: '0' }
+        });
+        this.lastEgressTriggerTerminal = triggerTerminal;
+      }
 
       this.faultState = {
         ...this.faultState,
@@ -739,7 +744,7 @@ export class ContextView implements vscode.WebviewViewProvider {
           exitCode: null,
           startedAtIso: new Date().toISOString(),
           faultCommand,
-          curlCommand: instructions
+          curlCommand: curlCommand ?? exportCmd
         },
         lastError: undefined
       };
@@ -758,7 +763,8 @@ export class ContextView implements vscode.WebviewViewProvider {
       );
 
       // Prefill but do not auto-run.
-      await this.prefillTerminal(triggerTerminal, instructions);
+      // This terminal is meant for hitting your app (after you've restarted it with the export).
+      await this.prefillTerminal(triggerTerminal, curlCommand ?? '# Restart your app with: ' + exportCmd);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.faultState = {
@@ -877,12 +883,12 @@ export class ContextView implements vscode.WebviewViewProvider {
       // ignore
     }
     try {
-      this.lastEgressInstructionsTerminal?.dispose();
+      this.lastEgressTriggerTerminal?.dispose();
     } catch {
       // ignore
     }
     this.lastIngressCurlTerminal = null;
-    this.lastEgressInstructionsTerminal = null;
+    this.lastEgressTriggerTerminal = null;
   }
 
   private async ensureFaultAvailable(faultPath: string): Promise<boolean> {
@@ -1965,6 +1971,151 @@ export class ContextView implements vscode.WebviewViewProvider {
       // Otherwise, show the placeholder (or nothing if outbound is active).
       const showInbound = !!route;
 
+      const routePath = route && route.path ? String(route.path) : '/';
+      const proxyUrl = 'http://127.0.0.1:9090' + (routePath.startsWith('/') ? routePath : ('/' + routePath));
+      const remoteOrigin = getRemoteOrigin(baseUrl);
+
+      const knownTemplates = [
+        'latency_tail_normal',
+        'latency_tail_spikes_pareto',
+        'latency_brownout_window',
+        'jitter_light_ingress',
+        'jitter_bidirectional',
+        'bandwidth_server_ingress_64_kbps',
+        'bandwidth_client_both_48_kbps_plus_latency',
+        'mobile_edge_3g',
+        'packet_loss_constant',
+        'packet_loss_burst',
+        'blackhole_constant',
+        'blackhole_window'
+      ];
+
+      function normalizeTemplateId(raw) {
+        const id = raw || 'latency_tail_normal';
+        return knownTemplates.includes(id) ? id : 'latency_tail_normal';
+      }
+
+      const inboundTemplateId = normalizeTemplateId(faultForm.inboundTemplateId || faultForm.templateId);
+      const outboundTemplateId = normalizeTemplateId(faultForm.outboundTemplateId || faultForm.templateId);
+
+      const isRunning = faultState.status === 'running';
+      const canRunInbound = showInbound;
+
+      function opt(selectedId, id, label) {
+        const selected = selectedId === id ? ' selected' : '';
+        return '<option value="' + esc(id) + '"' + selected + '>' + esc(label) + '</option>';
+      }
+
+      const statusPill = (() => {
+        if (faultState.status === 'running') {
+          return '<span class="pill">Running...</span>';
+        }
+        if (faultState.lastRun) {
+          const code = faultState.lastRun.exitCode;
+          return '<span class="pill">Exit ' + esc(code === null ? 'unknown' : String(code)) + '</span>';
+        }
+        return '<span class="pill">Idle</span>';
+      })();
+
+      const errorLine = faultState.lastError
+        ? '<div class="signal warning" style="margin-top: 8px;"><span class="signal-content">' + esc(faultState.lastError) + '</span></div>'
+        : '';
+
+      function templateIntentFor(templateId) {
+        if (templateId === 'latency_tail_normal') {
+          return 'Intent: expose timeout handling and tail-latency amplification (steady slow upstream).';
+        }
+        if (templateId === 'latency_tail_spikes_pareto') {
+          return 'Intent: simulate rare latency spikes to validate p99 behavior and backpressure.';
+        }
+        if (templateId === 'latency_brownout_window') {
+          return 'Intent: simulate a brownout window and validate degradation mode + recovery.';
+        }
+        if (templateId === 'jitter_light_ingress') {
+          return 'Intent: introduce variable delays to test jitter sensitivity and retry timing.';
+        }
+        if (templateId === 'jitter_bidirectional') {
+          return 'Intent: stress interactive flows with jitter both ways.';
+        }
+        if (templateId === 'bandwidth_server_ingress_64_kbps') {
+          return 'Intent: throttle downloads/responses to validate streaming, pagination, and timeouts.';
+        }
+        if (templateId === 'bandwidth_client_both_48_kbps_plus_latency') {
+          return 'Intent: simulate a slow client link to validate UX and payload sizing.';
+        }
+        if (templateId === 'mobile_edge_3g') {
+          return 'Intent: emulate a sluggish mobile connection (low bandwidth + latency + jitter).';
+        }
+        if (templateId === 'packet_loss_constant') {
+          return 'Intent: simulate flaky networks to reveal retry storms and hidden timeouts.';
+        }
+        if (templateId === 'packet_loss_burst') {
+          return 'Intent: simulate intermittent loss bursts to validate resilience and recovery.';
+        }
+        if (templateId === 'blackhole_constant') {
+          return 'Intent: force a hang/timeout path to validate cancellation and circuit breakers.';
+        }
+        if (templateId === 'blackhole_window') {
+          return 'Intent: simulate a temporary outage and verify recovery behavior.';
+        }
+        return '';
+      }
+
+      const inboundTitle = funcName || 'Current function';
+      const inboundWhy = 'Inbound fault injection helps you see how your API behaves for clients when the network is slow, lossy, or unstable.';
+      const inboundHow =
+        'We start a local fault proxy in front of your app at ' + remoteOrigin + '. ' +
+        'Send requests to the proxy URL to inject faults (your app still receives the same route).';
+
+      const inboundFlow =
+        '<div class="flow">' +
+        '<span class="flow-node client">client</span>' +
+        '<span class="flow-arrow">→</span>' +
+        '<span class="flow-node proxy">fault proxy</span>' +
+        '<span class="flow-arrow">→</span>' +
+        '<span class="flow-node app">app</span>' +
+        '</div>';
+
+      const inboundBody = showInbound ? (
+        '<div class="card-header">' +
+        '<span class="card-title">' + esc(inboundTitle) + '</span>' +
+        '<span>' + statusPill + '</span>' +
+        '</div>' +
+        '<div class="muted" style="margin-top: 4px; line-height: 1.35;">' + esc(inboundWhy) + '</div>' +
+        inboundFlow +
+        '<div class="muted" style="margin-top: 6px; line-height: 1.35;">' + esc(inboundHow) + '</div>' +
+        '<div class="form-grid" style="margin-top: 8px;">' +
+        '<div class="field">' +
+        '<label for="fault-template-inbound">Fault type</label>' +
+        '<select class="select" id="fault-template-inbound">' +
+        opt(inboundTemplateId, 'latency_tail_normal', 'Latency: tail (350ms +/- 50ms)') +
+        opt(inboundTemplateId, 'latency_tail_spikes_pareto', 'Latency: tail spikes (pareto)') +
+        opt(inboundTemplateId, 'latency_brownout_window', 'Latency: brownout window (sched)') +
+        opt(inboundTemplateId, 'jitter_light_ingress', 'Jitter: light ingress (30ms @ 5Hz)') +
+        opt(inboundTemplateId, 'jitter_bidirectional', 'Jitter: bidirectional (30ms @ 8Hz)') +
+        opt(inboundTemplateId, 'bandwidth_server_ingress_64_kbps', 'Bandwidth: server ingress (64 KBps)') +
+        opt(inboundTemplateId, 'bandwidth_client_both_48_kbps_plus_latency', 'Bandwidth: client both (48 KBps) + latency') +
+        opt(inboundTemplateId, 'mobile_edge_3g', 'Mobile edge: 48 KBps + 200ms + jitter') +
+        opt(inboundTemplateId, 'packet_loss_constant', 'Packet loss: constant') +
+        opt(inboundTemplateId, 'packet_loss_burst', 'Packet loss: burst window (sched)') +
+        opt(inboundTemplateId, 'blackhole_constant', 'Blackhole: constant') +
+        opt(inboundTemplateId, 'blackhole_window', 'Blackhole: outage window (sched)') +
+        '</select>' +
+        '<div class="muted" style="margin-top: 6px; line-height: 1.3;">' + esc(templateIntentFor(inboundTemplateId)) + '</div>' +
+        '</div>' +
+        '</div>' +
+        '<div class="button-row" style="margin-top: 8px;">' +
+        '<button class="button" data-action="faultRunInbound"' + (canRunInbound ? '' : ' disabled') + '>' + (isRunning ? 'Restart proxy' : 'Start proxy') + '</button>' +
+        '<button class="button" data-action="faultGenerateScenarioFile"' + (canRunInbound ? '' : ' disabled') + '>Generate scenario file</button>' +
+        '</div>' +
+        '<div class="code" style="margin-top: 8px;">' +
+        esc('Proxy URL (send requests here): ' + proxyUrl + '\\nForwards to: ' + remoteOrigin) +
+        '</div>' +
+        '<div class="muted" style="margin-top: 8px; line-height: 1.3;">HTTP error templates are not available in streaming proxy mode.</div>' +
+        (isRunning ? '<div class="muted" style="margin-top: 6px; line-height: 1.3;">Restart proxy will stop the current proxy and start a new one.</div>' : '') +
+        errorLine
+      ) : '';
+
       const egressCard = (() => {
         if (!outbound) {
           return '';
@@ -2017,7 +2168,12 @@ export class ContextView implements vscode.WebviewViewProvider {
 
         const runInfo =
           '<div class="code" style="margin-top: 8px;">' +
-          esc('Proxy: ' + proxyAddress + '\\nForwarding to: ' + remoteLabel + '\\n' + exportLine) +
+          esc(
+            'Proxy: ' + proxyAddress +
+            '\\nForwarding to: ' + remoteLabel +
+            '\\n' + exportLine +
+            '\\nRestart your application after setting ' + (envVar || 'YOUR_DEP_URL') + ' to ' + proxyAddress
+          ) +
           '</div>' +
           (triggerLine ? ('<div class="code" style="margin-top: 6px;">' + esc(triggerLine) + '</div>') : '');
 
