@@ -5,13 +5,16 @@ All notable changes to the "Unfault" extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.34] - 2026-01-29
+
+### Fixed
+
+- CodeLens: fix resolution to properly hide CodeLens when no impact data is available.
 
 ## [0.9.33] - 2026-01-29
 
 ### Fixed
 
-- CodeLens: fix resolution to properly hide CodeLens when no impact data is available.
 - Lint: remove unnecessary regex escapes in the context view web UI.
 
 ### Added
