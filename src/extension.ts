@@ -316,26 +316,26 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
   async resolveCodeLens(
     codeLens: vscode.CodeLens,
     _token: vscode.CancellationToken
-  ): Promise<vscode.CodeLens | null> {
+  ): Promise<vscode.CodeLens | undefined> {
     console.log('[Unfault] resolveCodeLens called at', codeLens.range.start);
     
     if (!client || serverState !== 'running') {
       console.log('[Unfault] Client not ready or server not running', { hasClient: !!client, serverState });
       // Returning a CodeLens without a command triggers VS Code errors.
-      return null;
+      return undefined;
     }
 
     const document = vscode.window.activeTextEditor?.document;
     if (!document) {
       console.log('[Unfault] No active editor document');
-      return null;
+      return undefined;
     }
 
     try {
       const functionName = await this.getFunctionNameAtPosition(document, codeLens.range.start);
       if (!functionName) {
         console.log('[Unfault] Could not find function name at position', codeLens.range.start);
-        return null;
+        return undefined;
       }
 
       console.log(`[Unfault] Requesting impact data for function: ${functionName}`);
@@ -371,10 +371,10 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
            parts.push('worth a look');
          }
 
-         // Hide CodeLens if there's nothing interesting to show
-         if (parts.length === 0) {
-           return null;
-         }
+          // Hide CodeLens if there's nothing interesting to show
+          if (parts.length === 0) {
+            return undefined;
+          }
 
          codeLens.command = {
            title: `uf: ${parts.join(' · ')}`,
@@ -384,22 +384,22 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
         console.log('[Unfault] Code lens resolved with title:', codeLens.command.title);
       } else {
         console.log('[Unfault] No impact data received');
-        return null;
+        return undefined;
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('Canceled')) {
         // Normal during rapid cursor/file changes.
-        return null;
+        return undefined;
       }
       console.error('[Unfault] Error resolving code lens:', error);
       // Hide CodeLens on error
-      return null;
+      return undefined;
     }
 
     // Safety: only return resolved CodeLenses with a valid command.
     if (!codeLens.command || !codeLens.command.command) {
-      return null;
+      return undefined;
     }
 
     return codeLens;

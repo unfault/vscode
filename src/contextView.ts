@@ -2159,7 +2159,7 @@ export class ContextView implements vscode.WebviewViewProvider {
         if (route && routePath) {
           try {
             const method = String(route.method || 'GET').toUpperCase();
-            const prettyPath = String(routePath).replace(/\{([^}]+)\}/g, '<$1>');
+             const prettyPath = String(routePath).replace(/{([^}]+)}/g, '<$1>');
             triggerLine = 'curl -i -X ' + esc(method) + ' ' + esc(joinUrlRaw(baseUrl, prettyPath));
           } catch {
             triggerLine = '';
@@ -2265,8 +2265,8 @@ export class ContextView implements vscode.WebviewViewProvider {
     function inferEnvVarFromTemplateText(text) {
       // Best-effort: Python f-strings use {NAME}, JS template literals use \${NAME}.
       const vars = new Set();
-      const pyRe = /\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
-      const jsRe = /\$\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}/g;
+      const pyRe = new RegExp('\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\}', 'g');
+      const jsRe = new RegExp('\\$\\{\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\}', 'g');
       let m;
       while ((m = pyRe.exec(text)) !== null) {
         vars.add(m[1]);
