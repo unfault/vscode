@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CodeLens: avoid VS Code "INVALID code lens resolved" errors by returning `undefined` (not `null`) when hiding CodeLens items.
 - Lint: remove unnecessary regex escapes in the context view web UI.
 
+### Added
+
+- New setting `unfault.api.baseUrl` to override `UNFAULT_BASE_URL` for the LSP process.
+
 ## [0.9.32] - 2026-01-28
 
 ### Added

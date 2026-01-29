@@ -159,6 +159,11 @@
           "default": "high",
           "description": "Minimum severity to show as diagnostics when diagnostics are enabled."
         },
+        "unfault.api.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Override the Unfault API base URL used by the LSP server (sets UNFAULT_BASE_URL for the server process). Leave empty to use the CLI config/env default."
+        },
         "unfault.fault.executablePath": {
           "type": "string",
           "default": "fault",

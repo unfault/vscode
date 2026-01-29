@@ -843,13 +843,23 @@ export function activate(context: vscode.ExtensionContext) {
   const command = getUnfaultPath();
   const args = ["lsp"];
 
+  // Allow overriding the API base URL specifically for the LSP process.
+  // This avoids surprises when VS Code is launched with a different environment
+  // than a terminal (e.g. stale UNFAULT_BASE_URL pointing at a tunnel).
+  const lspEnv: NodeJS.ProcessEnv = { ...process.env };
+  const apiBaseUrl = vscode.workspace.getConfiguration('unfault').get<string>('api.baseUrl', '').trim();
+  if (apiBaseUrl) {
+    lspEnv.UNFAULT_BASE_URL = apiBaseUrl;
+  }
+
   // Server options: run the unfault CLI in LSP mode
   const serverOptions: ServerOptions = {
-    run: { command, args, transport: TransportKind.stdio },
+    run: { command, args, transport: TransportKind.stdio, options: { env: lspEnv } },
     debug: {
       command,
       args: [...args, "--verbose"],
       transport: TransportKind.stdio,
+      options: { env: lspEnv },
     }
   };
 
