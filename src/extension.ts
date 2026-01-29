@@ -511,6 +511,31 @@ function getUnfaultPath(): string {
   return config.get('executablePath', 'unfault');
 }
 
+function getLspEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  const apiBaseUrl = vscode.workspace
+    .getConfiguration('unfault')
+    .get<string>('api.baseUrl', '')
+    .trim();
+  if (apiBaseUrl) {
+    env.UNFAULT_BASE_URL = apiBaseUrl;
+  }
+  return env;
+}
+
+function makeServerOptions(command: string, args: string[]): ServerOptions {
+  const env = getLspEnv();
+  return {
+    run: { command, args, transport: TransportKind.stdio, options: { env } },
+    debug: {
+      command,
+      args: [...args, '--verbose'],
+      transport: TransportKind.stdio,
+      options: { env },
+    },
+  };
+}
+
 function getLspSettingsPayload() {
   const config = vscode.workspace.getConfiguration('unfault');
   return {
@@ -843,25 +868,8 @@ export function activate(context: vscode.ExtensionContext) {
   const command = getUnfaultPath();
   const args = ["lsp"];
 
-  // Allow overriding the API base URL specifically for the LSP process.
-  // This avoids surprises when VS Code is launched with a different environment
-  // than a terminal (e.g. stale UNFAULT_BASE_URL pointing at a tunnel).
-  const lspEnv: NodeJS.ProcessEnv = { ...process.env };
-  const apiBaseUrl = vscode.workspace.getConfiguration('unfault').get<string>('api.baseUrl', '').trim();
-  if (apiBaseUrl) {
-    lspEnv.UNFAULT_BASE_URL = apiBaseUrl;
-  }
-
   // Server options: run the unfault CLI in LSP mode
-  const serverOptions: ServerOptions = {
-    run: { command, args, transport: TransportKind.stdio, options: { env: lspEnv } },
-    debug: {
-      command,
-      args: [...args, "--verbose"],
-      transport: TransportKind.stdio,
-      options: { env: lspEnv },
-    }
-  };
+  const serverOptions: ServerOptions = makeServerOptions(command, args);
 
   // Options to control the language client
   const clientOptions: LanguageClientOptions = {
@@ -1249,14 +1257,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     const command = getUnfaultPath();
     const args = ["lsp"];
-    const serverOptions: ServerOptions = {
-      run: { command, args, transport: TransportKind.stdio },
-      debug: {
-        command,
-        args: [...args, "--verbose"],
-        transport: TransportKind.stdio,
-      }
-    };
+    const serverOptions: ServerOptions = makeServerOptions(command, args);
 
     client = new LanguageClient(
       'unfault',
