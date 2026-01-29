@@ -291,15 +291,10 @@ class ImpactCodeLensProvider implements vscode.CodeLensProvider {
 
       for (const func of functions) {
         const position = func.range.start;
-        // Always attach a valid command so VS Code never sees a "resolved" CodeLens
-        // without a command (which it reports as INVALID).
-        codeLenses.push(
-          new vscode.CodeLens(new vscode.Range(position, position), {
-            title: '',
-            command: 'unfault.noop',
-            arguments: [],
-          })
-        );
+        // Create CodeLens without a command - VS Code will call resolveCodeLens
+        // to get the actual command. If resolve returns undefined, the CodeLens
+        // is hidden. This is the standard VS Code pattern.
+        codeLenses.push(new vscode.CodeLens(new vscode.Range(position, position)));
       }
     } catch (error) {
       console.error('[Unfault] Error getting document symbols:', error);

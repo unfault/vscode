@@ -11,8 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- CodeLens: avoid VS Code "INVALID code lens resolved" errors by returning `undefined` (not `null`) when hiding CodeLens items.
-- CodeLens: create CodeLens objects with a default noop command to prevent invalid CodeLens errors.
+- CodeLens: fix resolution to properly hide CodeLens when no impact data is available.
 - Lint: remove unnecessary regex escapes in the context view web UI.
 
 ### Added
