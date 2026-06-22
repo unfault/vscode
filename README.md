@@ -35,11 +35,11 @@ Unfault surfaces call paths, entry points, and gaps in safeguards — right wher
 3. Analysis runs against production-readiness signals
 4. Context appears in the sidebar and as code lenses
 
-Your source stays on your machine. Only the derived graph is sent for analysis.
+Everything runs locally — no API key, account, or network access required.
 
 ## Requirements
 
-Install and authenticate the CLI: [unfault.dev/docs/installation](https://unfault.dev/docs/installation)
+Install the CLI: [unfault.dev/docs/installation](https://unfault.dev/docs/installation)
 
 ## Supported Languages
 
@@ -59,11 +59,21 @@ Python · Go · Rust · TypeScript · JavaScript
 | `unfault.fault.executablePath` | Path to the fault CLI executable | `fault` |
 | `unfault.fault.baseUrl` | Base URL used to build runnable route URLs | `http://127.0.0.1:8000` |
 
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `Unfault: Find Call Path Between Functions` | Show the shortest call path between two functions in the workspace |
+| `Unfault: Find Route Handlers by URL Pattern` | Find route handlers matching a URL glob pattern |
+| `Unfault: Show Files That Depend on This File` | List all files that import the current file |
+| `Unfault: Run fault injection for current function` | Open fault injection panel for the function under cursor |
+| `Unfault: Restart Unfault LSP Server` | Restart the background LSP process |
+
 ## Troubleshooting
 
 **CLI not found** — add `unfault` to your PATH or set `unfault.executablePath`
 
-**No context showing** — check Output → "Unfault LSP" for errors, confirm login succeeded
+**No context showing** — check Output → "Unfault LSP" for errors
 
 ## Privacy
 

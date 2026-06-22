@@ -2,15 +2,16 @@
  * Unfault VS Code Extension
  *
  * This extension provides cognitive context for your code by integrating
- * with the Unfault CLI via LSP. The CLI performs client-side parsing and
- * sends analyzed IR to the Unfault API, keeping your source code local.
+ * with the Unfault CLI via LSP. All parsing and analysis runs locally —
+ * no API key, account, or network access required.
  *
  * Features:
  * - Function impact hovers (where is this used, what safeguards exist)
  * - Real-time insights via LSP
  * - File centrality awareness in the status bar
  * - Code actions for quick fixes
- * - Welcome panel for onboarding and authentication
+ * - Graph commands: call path, route handler lookup
+ * - Welcome panel for onboarding and setup
  */
 
 import * as vscode from 'vscode';
@@ -515,15 +516,7 @@ function getUnfaultPath(): string {
 }
 
 function getLspEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  const apiBaseUrl = vscode.workspace
-    .getConfiguration('unfault')
-    .get<string>('api.baseUrl', '')
-    .trim();
-  if (apiBaseUrl) {
-    env.UNFAULT_BASE_URL = apiBaseUrl;
-  }
-  return env;
+  return { ...process.env };
 }
 
 function makeServerOptions(command: string, args: string[]): ServerOptions {
@@ -1283,6 +1276,46 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(restartCommand);
+
+  // Register command: find shortest call path between two functions
+  const graphPathCommand = vscode.commands.registerCommand('unfault.graphPath', async () => {
+    const from = await vscode.window.showInputBox({
+      prompt: 'From function (file:function or just function name)',
+      placeHolder: 'e.g. src/api.py:handle_request'
+    });
+    if (!from) {
+      return;
+    }
+
+    const to = await vscode.window.showInputBox({
+      prompt: 'To function (file:function or just function name)',
+      placeHolder: 'e.g. src/db.py:execute_query'
+    });
+    if (!to) {
+      return;
+    }
+
+    const terminal = vscode.window.createTerminal('Unfault: Graph Path');
+    terminal.show();
+    terminal.sendText(`${getUnfaultPath()} graph path "${from}" "${to}"`);
+  });
+  context.subscriptions.push(graphPathCommand);
+
+  // Register command: find route handlers matching a URL pattern
+  const graphHandlersCommand = vscode.commands.registerCommand('unfault.graphHandlers', async () => {
+    const pattern = await vscode.window.showInputBox({
+      prompt: 'URL pattern to match (glob-style)',
+      placeHolder: 'e.g. /api/users/**'
+    });
+    if (!pattern) {
+      return;
+    }
+
+    const terminal = vscode.window.createTerminal('Unfault: Graph Handlers');
+    terminal.show();
+    terminal.sendText(`${getUnfaultPath()} graph handlers "${pattern}"`);
+  });
+  context.subscriptions.push(graphHandlersCommand);
 }
 
 export function deactivate(): Thenable<void> | undefined {

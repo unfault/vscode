@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.35] - 2026-06-22
+
+### Changed
+
+- Welcome panel: replaced authentication status card with binary detection — shows CLI version when found, install instructions when missing. No API key or account required.
+- All analysis is now fully local; removed `unfault.api.baseUrl` setting and `UNFAULT_BASE_URL` environment injection.
+- Updated "Privacy First" feature description to "Fully Local" — source code and data never leave your machine.
+- README: removed authentication requirement and "graph sent for analysis" copy.
+
+### Added
+
+- New command `Unfault: Find Call Path Between Functions` — prompts for two function names and runs `unfault graph path` in a terminal.
+- New command `Unfault: Find Route Handlers by URL Pattern` — prompts for a URL glob and runs `unfault graph handlers` in a terminal.
+
+### Removed
+
+- `unfault.api.baseUrl` setting (cloud API endpoint override — no longer applicable).
+- `unfault login` flow and all references to `app.unfault.dev` from the welcome panel.
+
 ## [0.9.34] - 2026-01-29
 
 ### Fixed

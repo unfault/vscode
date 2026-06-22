@@ -2,17 +2,17 @@
  * Welcome Panel for Unfault VSCode Extension
  *
  * Provides a user-friendly onboarding experience with:
- * - Cognitive context engine introduction
- * - Authentication status display
- * - Easy setup for `unfault login` or API key configuration
- * - Feature overview (hovers, file impact, diagnostics)
+ * - Binary detection and version display
+ * - Feature overview (code lenses, context sidebar, fault injection, diagnostics)
+ * - Configuration guidance
  * - Links to documentation
  */
 
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as os from 'os';
-import * as fs from 'fs';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Manages the Unfault Welcome webview panel
@@ -64,12 +64,6 @@ export class WelcomePanel {
     this._panel.webview.onDidReceiveMessage(
       async message => {
         switch (message.command) {
-          case 'runLogin':
-            // Open terminal and run unfault login
-            const terminal = vscode.window.createTerminal('Unfault Login');
-            terminal.show();
-            terminal.sendText('unfault login');
-            return;
           case 'openSettings':
             vscode.commands.executeCommand('workbench.action.openSettings', 'unfault');
             return;
@@ -100,46 +94,25 @@ export class WelcomePanel {
     }
   }
 
-  private _update() {
+  private async _update() {
     const webview = this._panel.webview;
     this._panel.title = 'Welcome to Unfault';
-    this._panel.webview.html = this._getHtmlForWebview(webview);
+    this._panel.webview.html = await this._getHtmlForWebview(webview);
   }
 
-  private _getAuthStatus(): { isAuthenticated: boolean; source: string | null; userName: string | null } {
-    // Check for config file
-    const configPath = path.join(os.homedir(), '.config', 'unfault', 'config.json');
-    
+  private async _getBinaryStatus(executablePath: string): Promise<{ found: boolean; version: string | null }> {
     try {
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        if (config.api_key) {
-          return { 
-            isAuthenticated: true, 
-            source: 'config file',
-            userName: config.user_name || null
-          };
-        }
-      }
+      const { stdout } = await execFileAsync(executablePath, ['--version'], { timeout: 5000 });
+      const version = stdout.trim().replace(/^unfault\s+/, '');
+      return { found: true, version: version || null };
     } catch {
-      // Ignore errors reading config
+      return { found: false, version: null };
     }
-
-    // Check for environment variable
-    if (process.env.UNFAULT_API_KEY) {
-      return { 
-        isAuthenticated: true, 
-        source: 'environment variable',
-        userName: null
-      };
-    }
-
-    return { isAuthenticated: false, source: null, userName: null };
   }
 
-  private _getHtmlForWebview(webview: vscode.Webview): string {
-    const authStatus = this._getAuthStatus();
+  private async _getHtmlForWebview(webview: vscode.Webview): Promise<string> {
     const executablePath = vscode.workspace.getConfiguration('unfault').get('executablePath', 'unfault');
+    const binaryStatus = await this._getBinaryStatus(executablePath as string);
 
     // Get the logo URI for the webview
     const logoUri = webview.asWebviewUri(
@@ -197,11 +170,11 @@ export class WelcomePanel {
             margin-bottom: 8px;
         }
         
-        .status-authenticated {
+        .status-ok {
             color: var(--vscode-terminal-ansiGreen);
         }
         
-        .status-unauthenticated {
+        .status-missing {
             color: var(--vscode-terminal-ansiYellow);
         }
         
@@ -224,42 +197,6 @@ export class WelcomePanel {
             margin-bottom: 12px;
             border-bottom: 1px solid var(--vscode-widget-border);
             padding-bottom: 8px;
-        }
-        
-        .auth-options {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        
-        .auth-option {
-            background: var(--vscode-editor-inactiveSelectionBackground);
-            border-radius: 8px;
-            padding: 16px;
-        }
-        
-        .auth-option h3 {
-            font-size: 14px;
-            font-weight: 600;
-            margin: 0 0 8px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .auth-option p {
-            color: var(--vscode-descriptionForeground);
-            font-size: 13px;
-            margin: 0 0 12px 0;
-        }
-        
-        .recommended {
-            background: var(--vscode-terminal-ansiGreen);
-            color: var(--vscode-editor-background);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
         }
         
         button {
@@ -328,6 +265,18 @@ export class WelcomePanel {
             font-size: 13px;
         }
         
+        .install-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin: 12px 0;
+        }
+
+        .install-step {
+            font-size: 13px;
+            color: var(--vscode-descriptionForeground);
+        }
+
         .links {
             display: flex;
             gap: 16px;
@@ -357,104 +306,92 @@ export class WelcomePanel {
     <p class="tagline">A cognitive context engine. Understand what your code means and does while you're writing it.</p>
 
     <div class="status-card">
-        ${authStatus.isAuthenticated ? `
-        <div class="status-header status-authenticated">
+        ${binaryStatus.found ? `
+        <div class="status-header status-ok">
             <span class="status-icon">✓</span>
-            Authenticated
+            CLI ready
         </div>
         <div class="status-details">
-            ${authStatus.userName ? `Logged in as <strong>${authStatus.userName}</strong>` : 'API key configured'} 
-            via ${authStatus.source}
+            <code>${executablePath}</code>${binaryStatus.version ? ` &mdash; version ${binaryStatus.version}` : ''}
             <br>
-            <a href="#" class="refresh-link" onclick="refresh()">Refresh status</a>
+            <a href="#" class="refresh-link" onclick="refresh()">Refresh</a>
         </div>
         ` : `
-        <div class="status-header status-unauthenticated">
+        <div class="status-header status-missing">
             <span class="status-icon">!</span>
-            Not Authenticated
+            CLI not found
         </div>
         <div class="status-details">
-            Please authenticate to enable code analysis.
+            <code>${executablePath}</code> was not found. Install the CLI or set the correct path in settings.
             <br>
-            <a href="#" class="refresh-link" onclick="refresh()">Refresh status</a>
+            <a href="#" class="refresh-link" onclick="refresh()">Refresh</a>
         </div>
         `}
     </div>
 
-    ${!authStatus.isAuthenticated ? `
+    ${!binaryStatus.found ? `
     <div class="section">
-        <h2>🔐 Authentication</h2>
-        <div class="auth-options">
-            <div class="auth-option">
-                <h3>
-                    Device Login
-                    <span class="recommended">Recommended</span>
-                </h3>
-                <p>
-                    The easiest way to authenticate. Opens your browser for secure sign-in with your Unfault account.
-                </p>
-                <div class="code-block">unfault login</div>
-                <button onclick="runLogin()">Run unfault login</button>
-            </div>
-            
-            <div class="auth-option">
-                <h3>API Key (Manual)</h3>
-                <p>
-                    Alternatively, you can set an API key directly. Get your API key from the 
-                    <a href="https://app.unfault.dev/settings/api-keys">Unfault Dashboard</a>.
-                </p>
-                <p>Set the <code>UNFAULT_API_KEY</code> environment variable, or create a config file:</p>
-                <div class="code-block">~/.config/unfault/config.json</div>
-                <div class="code-block">{
-  "api_key": "your-api-key-here"
-}</div>
-            </div>
+        <h2>Install the CLI</h2>
+        <div class="install-steps">
+            <div class="install-step">macOS (arm64):</div>
+            <div class="code-block">curl -Lo unfault https://github.com/unfault/unfault/releases/latest/download/unfault-latest-macos-arm64
+chmod +x unfault &amp;&amp; mv unfault /usr/local/bin/</div>
+            <div class="install-step">Linux (x86_64):</div>
+            <div class="code-block">curl -Lo unfault https://github.com/unfault/unfault/releases/latest/download/unfault-latest-linux-x86_64
+chmod +x unfault &amp;&amp; mv unfault /usr/local/bin/</div>
+            <div class="install-step">From source:</div>
+            <div class="code-block">cargo install unfault</div>
         </div>
+        <p style="font-size:13px; color: var(--vscode-descriptionForeground);">
+            If <code>unfault</code> is installed in a non-standard location, set the full path in settings.
+        </p>
+        <button class="secondary" onclick="openSettings()">Open Settings</button>
     </div>
     ` : ''}
 
     <div class="section">
-        <h2>⚙️ Configuration</h2>
+        <h2>Configuration</h2>
         <div class="config-info">
             <strong>CLI Executable:</strong> <code>${executablePath}</code>
             <br><br>
-            If <code>unfault</code> is not in your PATH, configure the full path in settings.
+            All analysis runs locally — no API key or account required.
+            If <code>unfault</code> is not in your PATH, set the full path in settings.
         </div>
         <button class="secondary" onclick="openSettings()">Open Settings</button>
     </div>
 
     <div class="section">
-        <h2>✨ Features</h2>
+        <h2>Features</h2>
         <div class="features">
             <div class="feature">
-                <h3>🔗 Function Impact</h3>
+                <h3>Function Impact</h3>
                 <p>Code lenses above functions show impact summary at a glance. Click to open detailed panel with callers, routes, and findings.</p>
             </div>
             <div class="feature">
-                <h3>📊 File Centrality</h3>
+                <h3>File Centrality</h3>
                 <p>Status bar shows how central a file is. Hub files that many others depend on are highlighted.</p>
             </div>
             <div class="feature">
-                <h3>🔔 Dependency Awareness</h3>
+                <h3>Dependency Awareness</h3>
                 <p>Get notified when you open a file that other parts of your codebase depend on.</p>
             </div>
             <div class="feature">
-                <h3>💡 Inline Insights</h3>
+                <h3>Inline Insights</h3>
                 <p>See contextual information about code behavior patterns as you write.</p>
             </div>
             <div class="feature">
-                <h3>🔧 Quick Fixes</h3>
+                <h3>Quick Fixes</h3>
                 <p>Apply suggested improvements with a single click via code actions.</p>
             </div>
             <div class="feature">
-                <h3>🔒 Privacy First</h3>
-                <p>Code is parsed locally. Only semantic structure is sent to the API, never your source code.</p>
+                <h3>Fully Local</h3>
+                <p>All parsing and analysis happens on your machine. No source code or data ever leaves your machine.</p>
             </div>
         </div>
     </div>
 
     <div class="section">
-        <h2>📚 Resources</h2>
+        <h2>Resources</h2>
         <div class="links">
             <a href="https://unfault.dev/docs">Documentation</a>
             <a href="https://unfault.dev/docs/rules">Rules Reference</a>
@@ -464,10 +401,6 @@ export class WelcomePanel {
 
     <script>
         const vscode = acquireVsCodeApi();
-        
-        function runLogin() {
-            vscode.postMessage({ command: 'runLogin' });
-        }
         
         function openSettings() {
             vscode.postMessage({ command: 'openSettings' });
