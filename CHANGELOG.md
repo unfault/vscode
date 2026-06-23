@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.36] - 2026-06-23
+
+### Fixed
+
+- Sidebar and CodeLens now populate correctly. All four issues were in the CLI LSP server (fixed in unfault 1.0.10); the extension already had the correct client-side wiring:
+  - `unfault/analysisComplete` is now sent after every analysis pass, triggering sidebar and CodeLens refresh.
+  - `getFileCentrality`, `getFileDependencies`, `getHttpCallAtPosition`, and `generateFaultScenarios` are now handled by the LSP server.
+  - `getFunctionImpact` now returns real findings from the per-document cache.
+  - Spurious "No API key configured" startup warning removed from the LSP server.
+
+### Requires
+
+- unfault CLI >= 1.0.10
+
 ## [0.9.35] - 2026-06-22
 
 ### Changed
